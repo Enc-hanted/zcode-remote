@@ -1,0 +1,242 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fitsSystemWindows="true"
+    android:orientation="vertical">
+
+    <!-- 顶栏 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="8dp"
+        android:paddingTop="12dp"
+        android:paddingEnd="16dp"
+        android:paddingBottom="4dp">
+
+        <ImageButton
+            android:id="@+id/btnBack"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/back_home"
+            android:padding="10dp"
+            android:src="@drawable/ic_arrow_back"
+            app:tint="@color/text_primary" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:text="@string/settings_title"
+            android:textColor="@color/text_primary"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="24dp">
+
+            <!-- 会话页 -->
+            <TextView
+                style="@style/SettingsGroupLabel"
+                android:text="@string/settings_section_page" />
+
+            <LinearLayout style="@style/SettingsRow">
+                <LinearLayout style="@style/SettingsRowText">
+                    <TextView
+                        style="@style/SettingsRowTitle"
+                        android:text="@string/settings_hide_scrollbar" />
+                    <TextView
+                        style="@style/SettingsRowSubtitle"
+                        android:text="@string/settings_hide_scrollbar_sub" />
+                </LinearLayout>
+                <com.google.android.material.materialswitch.MaterialSwitch
+                    android:id="@+id/switchScrollbar"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/SettingsRow">
+                <LinearLayout style="@style/SettingsRowText">
+                    <TextView
+                        style="@style/SettingsRowTitle"
+                        android:text="@string/settings_turn_nav" />
+                    <TextView
+                        style="@style/SettingsRowSubtitle"
+                        android:text="@string/settings_turn_nav_sub" />
+                </LinearLayout>
+                <com.google.android.material.materialswitch.MaterialSwitch
+                    android:id="@+id/switchNavigator"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/SettingsRow">
+                <LinearLayout style="@style/SettingsRowText">
+                    <TextView
+                        style="@style/SettingsRowTitle"
+                        android:text="@string/settings_floating_input" />
+                    <TextView
+                        style="@style/SettingsRowSubtitle"
+                        android:text="@string/settings_floating_input_sub" />
+                </LinearLayout>
+                <com.google.android.material.materialswitch.MaterialSwitch
+                    android:id="@+id/switchFloatingInput"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/SettingsRow">
+                <LinearLayout style="@style/SettingsRowText">
+                    <TextView
+                        style="@style/SettingsRowTitle"
+                        android:text="@string/settings_notify_reply" />
+                    <TextView
+                        style="@style/SettingsRowSubtitle"
+                        android:text="@string/settings_notify_reply_sub" />
+                </LinearLayout>
+                <com.google.android.material.materialswitch.MaterialSwitch
+                    android:id="@+id/switchNotifyReply"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
+            </LinearLayout>
+
+            <!-- 通知权限状态（API 33 以下由代码隐藏） -->
+            <LinearLayout
+                android:id="@+id/notifyStatusRow"
+                style="@style/SettingsRow">
+                <LinearLayout style="@style/SettingsRowText">
+                    <TextView
+                        style="@style/SettingsRowTitle"
+                        android:text="@string/settings_notify_status" />
+                    <TextView
+                        android:id="@+id/notifyStatusText"
+                        style="@style/SettingsRowSubtitle" />
+                </LinearLayout>
+                <Button
+                    android:id="@+id/btnNotifyStatus"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/notify_denied_action" />
+            </LinearLayout>
+
+            <View style="@style/SettingsDivider" />
+
+            <!-- 后台保活 -->
+            <TextView
+                style="@style/SettingsGroupLabel"
+                android:text="@string/settings_section_alive" />
+
+            <LinearLayout style="@style/SettingsRow">
+                <LinearLayout style="@style/SettingsRowText">
+                    <TextView
+                        style="@style/SettingsRowTitle"
+                        android:text="@string/settings_keep_alive" />
+                    <TextView
+                        style="@style/SettingsRowSubtitle"
+                        android:text="@string/settings_keep_alive_sub" />
+                </LinearLayout>
+                <com.google.android.material.materialswitch.MaterialSwitch
+                    android:id="@+id/switchKeepAlive"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
+            </LinearLayout>
+
+            <RadioGroup
+                android:id="@+id/radioDuration"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:orientation="horizontal">
+
+                <com.google.android.material.radiobutton.MaterialRadioButton
+                    android:id="@+id/radio5"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/duration_5"
+                    android:textColor="@color/text_primary" />
+
+                <com.google.android.material.radiobutton.MaterialRadioButton
+                    android:id="@+id/radio10"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="16dp"
+                    android:text="@string/duration_10"
+                    android:textColor="@color/text_primary" />
+
+                <com.google.android.material.radiobutton.MaterialRadioButton
+                    android:id="@+id/radio30"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="16dp"
+                    android:text="@string/duration_30"
+                    android:textColor="@color/text_primary" />
+            </RadioGroup>
+
+            <View style="@style/SettingsDivider" />
+
+            <!-- 显示 -->
+            <TextView
+                style="@style/SettingsGroupLabel"
+                android:text="@string/settings_section_display" />
+
+            <LinearLayout style="@style/SettingsRow">
+                <LinearLayout style="@style/SettingsRowText">
+                    <TextView
+                        style="@style/SettingsRowTitle"
+                        android:text="@string/settings_zoom" />
+                    <TextView
+                        style="@style/SettingsRowSubtitle"
+                        android:text="@string/settings_zoom_sub" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <com.google.android.material.slider.Slider
+                    android:id="@+id/sliderZoom"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:stepSize="5"
+                    android:valueFrom="80"
+                    android:valueTo="150" />
+
+                <TextView
+                    android:id="@+id/zoomValue"
+                    android:layout_width="52dp"
+                    android:layout_height="wrap_content"
+                    android:gravity="end"
+                    android:textColor="@color/text_primary"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="28dp"
+                android:gravity="center"
+                android:text="@string/settings_note"
+                android:textColor="@color/text_secondary"
+                android:textSize="11sp" />
+        </LinearLayout>
+    </ScrollView>
+</LinearLayout>

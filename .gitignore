@@ -1,0 +1,27 @@
+# Gradle / Android
+.gradle/
+build/
+app/build/
+local.properties
+*.iml
+.idea/
+.cxx/
+
+# 不要把 keystore 传上来
+*.jks
+*.keystore
+
+# _validate.py 生成的校验产物
+dev/_check_embedded.js
+__pycache__/
+
+# dev/bundle/*.js 拼接生成的注入包（改 JS 改模块文件，勿手改）
+_bundle.js
+
+# 开源准备：本地验证截图 / 浏览器测试产物 / 会话计划
+/real-*.png
+/preview-*.png
+/v42-preview.png
+/expand-btn-check.png
+.playwright-mcp/
+.zcode/
