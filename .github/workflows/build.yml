@@ -1,0 +1,52 @@
+name: Build APK
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Ensure debug keystore
+        # keystore 不入库（gitignore）；CI 上按固定参数生成，与本地签名一致，可覆盖安装
+        run: |
+          if [ ! -f keystore/debug.keystore ]; then
+            mkdir -p keystore
+            keytool -genkeypair -v \
+              -keystore keystore/debug.keystore \
+              -storepass android -keypass android \
+              -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
+          fi
+
+      - name: Rebuild embedded bundle + validate
+        # 用 _bundle.js 重新内嵌 BUNDLE_JS，并跑全套校验（XML/Kotlin/JS 语法/资源引用），
+        # 保证 bundle 不会与内嵌版本漂移、语法错误不会静默上线
+        run: |
+          python3 _patch_web2.py
+          python3 _validate.py
+
+      - name: Build debug APK
+        run: gradle --no-daemon --stacktrace assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ZCodeRemote-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30
