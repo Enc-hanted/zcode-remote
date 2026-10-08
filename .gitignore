@@ -1,0 +1,38 @@
+# Gradle / Android
+.gradle/
+build/
+app/build/
+local.properties
+*.iml
+.idea/
+.cxx/
+
+# 不要把 keystore 传上来
+*.jks
+*.keystore
+
+# _validate.py 生成的校验产物
+dev/_check_embedded.js
+__pycache__/
+
+# dev/bundle/*.js 拼接生成的注入包（改 JS 改模块文件，勿手改）
+_bundle.js
+
+# 开源准备：本地验证截图 / 浏览器测试产物 / 会话计划
+/real-*.png
+/preview-*.png
+/v42-preview.png
+/expand-btn-check.png
+.playwright-mcp/
+.zcode/
+
+# 内部文档：仅本地交接/审查/需求，不进公开仓库
+/HANDOFF.md
+/REVIEW.md
+/需求文档.md
+
+# 本地验证截图 / 会话工具杂项（不入公开仓库）
+/v6*-*.png
+/state-check.png
+/.zcodeignore
+/dev/_serve_cors.py

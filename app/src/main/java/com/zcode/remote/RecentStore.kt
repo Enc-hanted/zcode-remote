@@ -1,0 +1,100 @@
+package com.zcode.remote
+
+import android.content.Context
+import android.net.Uri
+import org.json.JSONArray
+import org.json.JSONObject
+
+/** 一条最近会话记录。name 取自远控链接里的 name= 参数（桌面端机器名）。 */
+data class Recent(val url: String, val name: String, val last: Long) {
+    fun displayLabel(): String {
+        if (name.isNotBlank()) return name
+        val host = runCatching { Uri.parse(url).host }.getOrNull()
+        return host ?: url
+    }
+
+    override fun toString(): String = displayLabel()
+}
+
+/** 用 SharedPreferences + JSON 保存最近使用过的远控链接，最多 10 条。 */
+class RecentStore(context: Context) {
+
+    private val prefs = context.applicationContext
+        .getSharedPreferences("zcode_remote_recents", Context.MODE_PRIVATE)
+
+    fun load(): MutableList<Recent> {
+        val raw = prefs.getString(KEY_ITEMS, null) ?: return mutableListOf()
+        // 单条损坏只跳过该条，不清空整表（防止一次坏数据丢掉全部最近会话）
+        return try {
+            val arr = JSONArray(raw)
+            val out = mutableListOf<Recent>()
+            for (i in 0 until arr.length()) {
+                try {
+                    val o = arr.getJSONObject(i)
+                    out.add(
+                        Recent(
+                            url = o.getString("url"),
+                            name = o.optString("name"),
+                            last = o.optLong("last"),
+                        ),
+                    )
+                } catch (e: Exception) {
+                    // 跳过损坏条目
+                }
+            }
+            out
+        } catch (e: Exception) {
+            mutableListOf()
+        }
+    }
+
+    fun upsert(url: String) {
+        val list = load()
+        list.removeAll { it.url == url }
+        val name = param(url, "name")
+        val mid = param(url, "mid")
+        // 同一设备只保留一条：桌面端每次配对都会轮换链接（sid/hash/t 变），直接 upsert 会
+        // 堆出多张同名卡片。mid（机器 ID，3.14.4 链接实测携带）相同即同一台设备，新链接覆盖旧链接；
+        // 链接没有 mid 时退回按机器名合并（两台设备同名会被误并，可接受）
+        if (mid.isNotBlank()) {
+            list.removeAll { param(it.url, "mid") == mid }
+        } else if (name.isNotBlank()) {
+            list.removeAll { param(it.url, "name") == name }
+        }
+        list.add(0, Recent(url, name, System.currentTimeMillis()))
+        while (list.size > MAX) list.removeAt(list.size - 1)
+        save(list)
+    }
+
+    fun remove(url: String) {
+        val list = load()
+        list.removeAll { it.url == url }
+        save(list)
+    }
+
+    /** 读链接里的查询参数；缺失或解析失败返回空串（不抛出）。 */
+    private fun param(url: String, key: String): String =
+        runCatching { Uri.parse(url).getQueryParameter(key) }.getOrNull().orEmpty()
+
+    private fun save(list: List<Recent>) {
+        val arr = JSONArray()
+        for (r in list) {
+            arr.put(
+                JSONObject()
+                    .put("url", r.url)
+                    .put("name", r.name)
+                    .put("last", r.last),
+            )
+        }
+        prefs.edit().putString(KEY_ITEMS, arr.toString()).apply()
+        // 记录存储格式版本：未来格式变更时在 load() 里按版本迁移
+        prefs.edit().putInt(KEY_SCHEMA, SCHEMA_V1).apply()
+    }
+
+    companion object {
+        private const val KEY_ITEMS = "items"
+        private const val KEY_SCHEMA = "schema_v"
+        private const val SCHEMA_V1 = 1
+        private const val MAX = 10
+    }
+}
