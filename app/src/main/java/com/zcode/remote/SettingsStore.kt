@@ -11,7 +11,6 @@ data class PageSettings(
     val restoreOnBottom: Boolean,
     val sendMinimize: Boolean,
     val kbFollowExp: Boolean,
-    val longPressMenu: Boolean,
     val amoledBlack: Boolean,
 )
 
@@ -86,11 +85,6 @@ class SettingsStore(context: Context) {
         get() = prefs.getBoolean(KEY_KB_FOLLOW_EXP, false)
         set(v) = prefs.edit().putBoolean(KEY_KB_FOLLOW_EXP, v).apply()
 
-    /** v79⑧：长按消息快捷菜单（复制全文/引用）；长按文本本身仍是原生长按选择 */
-    var longPressMenu: Boolean
-        get() = prefs.getBoolean(KEY_LONG_PRESS_MENU, true)
-        set(v) = prefs.edit().putBoolean(KEY_LONG_PRESS_MENU, v).apply()
-
     /** v79⑨：纯黑 AMOLED（实验）——注入层换纯黑 token + 页面底面 best-effort 纯黑 */
     var amoledBlack: Boolean
         get() = prefs.getBoolean(KEY_AMOLED_BLACK, false)
@@ -119,7 +113,6 @@ class SettingsStore(context: Context) {
         restoreOnBottom = restoreOnBottom,
         sendMinimize = sendMinimize,
         kbFollowExp = kbFollowExp,
-        longPressMenu = longPressMenu,
         amoledBlack = amoledBlack,
     )
 
@@ -135,7 +128,6 @@ class SettingsStore(context: Context) {
         private const val KEY_RESTORE_ON_BOTTOM = "restore_on_bottom"
         private const val KEY_SEND_MINIMIZE = "send_minimize"
         private const val KEY_KB_FOLLOW_EXP = "kb_follow_exp"
-        private const val KEY_LONG_PRESS_MENU = "long_press_menu"
         private const val KEY_AMOLED_BLACK = "amoled_black"
         private const val KEY_LOGO_POS_SET = "logo_pos_set"
         private const val KEY_LOGO_X = "logo_x"

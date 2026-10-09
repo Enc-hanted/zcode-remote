@@ -90,6 +90,13 @@
         'html.zcode-float-on [data-testid="v4-timeline"] [style*="mask-position"],' +
         'html.zcode-float-on [data-testid="v4-timeline-scroll"] [style*="mask-position"]' +
         '{-webkit-mask-image:none!important;mask-image:none!important}' +
+        // v80⑦：z.ai 原生"滚动到底部"圆钮避让系统手势条（实机诊断 dockHtml/popupSnap 取证：
+        // v4-timeline-bottom 挂在 dock 内 data-v4-back-to-bottom-anchor 锚上，absolute/
+        // bottom-full/mb-2 悬在 0 高 dock 上方，收纳态离屏底仅 ~8px 压小白条）。transform
+        // 整体重写并复刻它自带的 -translate-x-1/2 居中：抬高 安全区+6px（原 8px 底距 +
+        // 抬升量 ≥ safeB+10 的避让口径）。safeB=0（桌面/旧壳）时只抬 6px，无感
+        'html.zcode-float-on [data-testid="v4-timeline-bottom"]' +
+        '{transform:translate(-50%, calc(-6px - var(--zc-safe-b, 0px)))!important}' +
         // v78 让位垫过渡：胶囊唤出/收纳时 tl 的 padding-bottom 变化不再是瞬时跳变，
         // 而是短滑过渡——垫的写入时机已挪到 morph 落位之后（06_composer），配合这条
         // 过渡整个"消息列表为胶囊让位"的动作是连续的。仅收纳态生效，不干扰 z.ai

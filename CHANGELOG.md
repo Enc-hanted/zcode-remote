@@ -4,7 +4,18 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/)。
 
-## [未发布] — v79 工作区（bundleVer 56）
+## [未发布] — v80 工作区（bundleVer 57）
+
+v79 实机首验四条反馈的修复轮。
+
+- **⑧ 长按消息菜单：整套删除**（用户淘汰）：bundle 手势/动作条/复制引用、设置开关（Kotlin/XML/strings）、注入键、诊断字段、mock 钩子全链路移除
+- **① 发送后归位真机失效根修**：实机诊断 `dockHtml` 实锤 z.ai 输入区是 **Lexical contenteditable div**（`data-lexical-editor`），不是 textarea——v79 的输入跟踪只认 `TEXTAREA/INPUT.value`，真机上 `sendHadText` 永假、①从不触发（mock 用 textarea 所以本地全绿，又一次"mock 同构性"教训）。文本读取改双形态兼容（`.value` / `.textContent`），事件过滤放宽 contenteditable；mock 输入区同步换 contenteditable
+- **② 双击直进全屏加宽**：窗口 330→500ms、tap 位移容差 10→14px（真机手指起落天然漂移十几像素，mock 合成事件零漂移测不出）；新增遮罩落点回退——第二击落在 44px 图标之外的遮罩上（距首击 120px 内）也认双击，直进全屏
+- **⑦ ↓ 圆钮抬升根修**：v79 的几何解析器整棵排除 dock 子树，而实机诊断实锤 ↓ 钮（`v4-timeline-bottom`，28×28，absolute/bottom-full 悬在 0 高 dock 上方 8px）**就在 dock 内部**——被自己排除了。选择器已知（testid 稳定），几何解析器删除，换 02_style 静态 CSS 直抬 `translate(-50%, calc(-6px - var(--zc-safe-b)))`（复刻其 Tailwind 居中；mock 实测 Y −6→−32，底距 8→40px）
+- **③ 键盘跟随·实验加固**（实机"键盘盖住输入框"）：原生侧 onProgress 动画期按 ≥8px 步进补报（v79 只在 onApply 报终值，任一环没送到 JS 就全程不知键盘来了）；JS 侧 visualViewport 高度差兜底（部分 WebView 版本会更新 vv）；诊断 `feats` 新增 `kbCalls/kbAgo` 桥接埋点（kbCalls=0=桥断、≥100=vv 兜底生效过），下次实机一发诊断即可分辨"原生没报"vs"报了没生效"
+- ⑥ 阅读线经全链路探针回归 4/4 通过（间歇失败为测试脚手架内容高度不足，非代码问题；实机诊断 uiTrace 本有 readline-place 成功记录）；⑤ 骨架/⑨ AMOLED 无回归；全套 validate/smoke/Playwright 绿
+
+## [已推送 03e510a] — v79（bundleVer 56）
 
 小屏交互提案批次落地：用户从 10 条提案中划掉 ④（音量键翻页）与 ⑩（边缘手势分区），其余 ①②③⑤⑥⑦⑧⑨ 全部实现。设置页新增四个开关（发送后归位 / 长按消息菜单 / 键盘跟随·实验 / 纯黑 AMOLED·实验），经 `window.__zcSettings` 注入、`applySettings` 热更，不重进会话即生效。
 

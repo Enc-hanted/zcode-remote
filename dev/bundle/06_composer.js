@@ -47,6 +47,7 @@
     // pointer 处理器对 pointerType==='touch' 一律放行，避免移动端 touch+pointer 双触发。
     var iconTrack = null;
     var lastIconTapAt = 0;   // v79②：最近一次图标单击时刻（双击直进全屏的判据）
+    var lastIconTapXY = null;   // v80②：该次单击的落点（第二击落在图标旁的遮罩上也算双击）
     function evXY(e){
       if (e.touches) { return e.touches[0]; }
       return e;
@@ -107,9 +108,11 @@
       iconRelease(ic);
       // touchend 用 changedTouches（手指离开位置），pointerup 用事件自身坐标
       var t = e.changedTouches ? e.changedTouches[0] : e;
-      if (Date.now() - tr.t0 < 350 && Math.abs(t.clientX - tr.x) < 10 && Math.abs(t.clientY - tr.y) < 10) {
+      // v80②：容差 10→14px——真机手指起落天然带十几像素漂移，紧容差把正常双击拍成
+      // "非 tap"（mock 合成事件零漂移所以本地测不出）；双击窗口 330→500ms 同理
+      if (Date.now() - tr.t0 < 400 && Math.abs(t.clientX - tr.x) < 14 && Math.abs(t.clientY - tr.y) < 14) {
         var now = Date.now();
-        if (now - lastIconTapAt < 330) {
+        if (now - lastIconTapAt < 500) {
           // v79②：双击直进全屏。首击已唤出浮动胶囊（图标在宽限窗内隐形但可接——见
           // ensureIcon），第二击落点仍是图标：等 morph 飞行结束再切全屏，避免两段
           // 变换的 morphTok 互相打架（替身清理被顶掉会漏出隐藏的真身）
@@ -122,6 +125,7 @@
           return;
         }
         lastIconTapAt = now;
+        lastIconTapXY = { x: tr.x, y: tr.y };   // v80②：遮罩回退用（第二击落图标旁也算双击）
         uiLog('icon-tap');
         showComposer();
       }
@@ -227,18 +231,26 @@
         showComposer(false);
       }
     }
-    // ---------- v79①：发送后归位 ----------
+    // ---------- v79①：发送后归位（v80 修真机失效） ----------
     // 触发签名（双证据）：composer 开着 + 输入框刚有字 → 新的用户行出现 且 输入框已清空。
-    // "手动删光字"不会有新用户行，不误触。z.ai 发送即清输入框（React 受控清空会先于
-    // 行挂载发生），所以"清空"只作证据不作触发——触发点始终是新用户行的出现。
+    // "手动删光字"不会有新用户行，不误触。z.ai 发送即清输入框（先于行挂载），所以"清空"
+    // 只作证据不作触发——触发点始终是新用户行的出现。
+    // v80 教训：真页 v4-composer-input 是 Lexical **contenteditable div**（诊断 dockHtml
+    // 实锤），不是 textarea——旧版只认 TEXTAREA/INPUT.value，真机上 sendHadText 永假、
+    // ①从不触发（mock 用 textarea 所以本地全绿）。文本读取改双形态兼容。
     // 归位延迟 420ms：让 z.ai 自己的发送动画先走一步，morph 收纳接在其后，两段不叠帧。
     var sendHadText = false, sendHadTextAt = 0;
+    function composerTextOf(t){
+      if (t.tagName === 'TEXTAREA' || t.tagName === 'INPUT') { return t.value || ''; }
+      return (t.textContent || '');   // contenteditable（真页形态）
+    }
     function onComposerInput(e){
       var t = e.target;
-      if (!t || !t.tagName) { return; }
-      if (t.tagName !== 'TEXTAREA' && t.tagName !== 'INPUT') { return; }
-      if (!t.closest || !t.closest('[data-v4-composer-dock="true"]')) { return; }
-      if (t.value && t.value.trim()) { sendHadText = true; sendHadTextAt = Date.now(); }
+      if (!t || !t.tagName || !t.closest) { return; }
+      if (!t.closest('[data-v4-composer-dock="true"]')) { return; }
+      if (t.tagName !== 'TEXTAREA' && t.tagName !== 'INPUT' &&
+          !t.isContentEditable && !t.closest('[data-testid^="v4-composer-input"]')) { return; }
+      if (composerTextOf(t).trim()) { sendHadText = true; sendHadTextAt = Date.now(); }
       else if (Date.now() - sendHadTextAt > 600) { sendHadText = false; }   // 发送瞬间的清空（600ms 内）不灭旗
     }
     var sendObs = null;
@@ -261,7 +273,7 @@
             if (cls.indexOf('group/user-row') < 0) { continue; }
             var dk = getDock();
             var ta = dk ? dk.querySelector('[data-testid^="v4-composer-input"], textarea') : null;
-            if (ta && ta.value && ta.value.trim()) { continue; }   // 有字=不是发送
+            if (ta && composerTextOf(ta).trim()) { continue; }   // 有字=不是发送
             sendHadText = false;
             uiLog('send-minimize');
             setTimeout(function(){
@@ -332,44 +344,12 @@
       if (dist2 > 260) { placeReadLine(tl); }
     }
 
-    // ---------- v79⑦：底部悬浮控件统一抬升（z.ai 原生 ↓ 回底圆钮避让小白条） ----------
-    // 未连 USB 无法现场锚定选择器，走几何解析：收纳态里"悬在视口底部 170px 内的
-    // fixed/absolute 小圆钮（18-46px 近方形）"逐个测底缘与 安全区+10px 的差值，差多少
-    // translateY 补多少（transform 不挑定位方案，不猜 bottom/top）。幂等：rect 反映已
-    // 应用的位移，补满后 deficit≤0 不再写。行内静态定位的操作按钮（复制/点赞）被
-    // position 过滤器排除，不会被挪。命中即记 liftLog（诊断卡可查 → 下次连 USB 钉死
-    // 选择器后可换成静态 CSS）。
-    var liftLog = [];
-    function liftBottomFloats(){
-      if (composerOpen || !doc.documentElement.classList.contains('zcode-float-on')) { return; }
-      var need = safeB() + 10;
-      if (need <= 10) { return; }   // 桌面/旧壳：没有小白条要避让
-      var vh = window.innerHeight, vw = window.innerWidth;
-      var cands = root.querySelectorAll('button, [role="button"]');
-      for (var i = 0; i < cands.length && i < 80; i++) {
-        var el = cands[i];
-        if (el.id && el.id.indexOf('zcode-') === 0) { continue; }
-        if (el.closest && el.closest('[data-v4-composer-dock="true"], ' + NAV_SEL + ', #zcode-mask, #zcode-skeleton, #zcode-msg-sheet, #zcode-msg-sheet-catcher')) { continue; }
-        var w = el.offsetWidth, h = el.offsetHeight;
-        if (w < 18 || w > 46 || h < 18 || h > 46 || Math.abs(w - h) > 10) { continue; }
-        var pos = '';
-        try { pos = getComputedStyle(el).position; } catch (eP) {}
-        if (pos !== 'fixed' && pos !== 'absolute') { continue; }
-        var r = el.getBoundingClientRect();
-        if (r.bottom <= vh - 170 || r.bottom > vh + 4 || r.left < 0 || r.right > vw) { continue; }
-        var deficit = need - (vh - r.bottom);
-        if (deficit <= 0.5) { continue; }
-        if (el.__zcLiftT === undefined) {
-          el.__zcLiftT = el.style.transform || '';
-          liftLog.push((el.tagName + '[' + (el.getAttribute('data-testid') || '') + ']' +
-            Math.round(w) + 'x' + Math.round(h) + '@' + Math.round(r.left) + ',' + Math.round(r.top) +
-            ' +' + Math.round(deficit)).slice(0, 60));
-          if (liftLog.length > 6) { liftLog.shift(); }
-          uiLog('float-lift');
-        }
-        el.style.transform = (el.__zcLiftT ? el.__zcLiftT + ' ' : '') + 'translateY(' + (-Math.ceil(deficit)) + 'px)';
-      }
-    }
+    // ---------- v79⑦→v80：↓ 圆钮避让小白条 ----------
+    // v79 走几何解析（无 USB 锚不到选择器），实机诊断实锤翻车原因：↓ 钮（v4-timeline-
+    // bottom）挂在 dock 内部 data-v4-back-to-bottom-anchor 锚上（absolute/bottom-full，
+    // 悬在 0 高 dock 上方 ~8px），lifter 把"整棵 dock 子树"排除时把它一起排掉了。
+    // 现在选择器已知（testid 稳定），改为 02_style 的静态 CSS 直抬（transform 重写需
+    // 复刻它自带的 -translate-x-1/2 居中），零轮询零测量，React 重渲染也盖不掉。
 
     function dockGesturePtrDown(e){
       if (e.pointerType === 'touch') { return; }
@@ -408,10 +388,10 @@
     var lastDockH = -1;   // v66：dock 流内高度跟踪（收纳 0 / 唤出悬浮 / 常驻 121），变化时通知列表重算
     var restoreOnBottom = true;   // v67 设置项"滑到底部恢复输入框"（原生 applySettings 热更）
     // v79 会话页新开关（原生层注入 window.__zcSettings，applySettings 热更；mock 预览页同形）
+    // v80：⑧长按菜单用户淘汰已整套删除（longPressMenu 键随之退役，旧存档多出的键无害）
     var ZSET = (window.__zcSettings = window.__zcSettings || {});
     var sendMinimize = (ZSET.sendMinimize !== false);      // ① 发送后归位（默认开）
     var kbFollowExp = (ZSET.kbFollowExp === true);          // ③ 键盘跟随·实验（默认关）
-    var longPressMenu = (ZSET.longPressMenu !== false);     // ⑧ 长按消息菜单（默认开）
     var amoledBlack = (ZSET.amoledBlack === true);          // ⑨ 纯黑 AMOLED（默认关）
     function applyAmoled(){
       try { doc.documentElement.classList.toggle('zc-amoled', amoledBlack); } catch (e) {}
@@ -1130,7 +1110,6 @@
       trackStreamGrow();
       if (readLineEl && (!streamingNow() || !readLineEl.isConnected)) { removeReadLine(true); }
       applyKbLift();   // v79③：键盘实验模式——胶囊高度变化（多行）时重算抬升量
-      liftBottomFloats();   // v79⑦：z.ai 原生 ↓ 圆钮等底部悬浮件避让小白条
       // 按钮是胶囊的子节点，位置不随状态变化（只依赖半径），无需再定位
     }
     // 按钮中心对准胶囊右上角圆角圆心。按钮是胶囊的 absolute 子节点，所以只按半径算偏移，
@@ -1177,6 +1156,7 @@
     // (胶囊顶缘-8px)——全屏态胶囊很高时只抬差值，不顶出屏。CSS 过渡（02_style
     // zc-kb-on 规则）让抬升本身是动画；1s 轮询里补算（多行输入胶囊变高时重算）。
     var kbH = 0, kbLift = 0;
+    var kbCalls = 0, kbLastAt = 0;   // v80③：桥接埋点——下次诊断分辨"原生没报"vs"报了没生效"
     function calcKbLift(){
       if (kbH <= 0 || !composerOpen) { return 0; }
       var dk = getDock();
@@ -1196,12 +1176,31 @@
         doc.documentElement.classList.toggle('zc-kb-on', kbH > 0);
       } catch (e) {}
     }
+    function setKbH(h){
+      kbH = (typeof h === 'number' && h > 0 && h < window.innerHeight * 0.9) ? h : 0;
+      applyKbLift();
+    }
     try {
       window.__zcKb = function(h){
-        kbH = (typeof h === 'number' && h > 0 && h < window.innerHeight * 0.9) ? h : 0;
-        applyKbLift();
+        kbCalls++;
+        kbLastAt = Date.now();
+        setKbH(h);
       };
     } catch (eK0) {}
+    // v80③ 兜底：实验模式下若 WebView 未缩放但 Chromium 仍更新 visualViewport（部分
+    // 版本会），高度差直接当键盘高度用——原生桥（__zcKb）正常时两者一致，无害
+    try {
+      if (window.visualViewport && window.visualViewport.addEventListener) {
+        window.visualViewport.addEventListener('resize', function(){
+          if (!kbFollowExp || !composerOpen) { return; }
+          var implied = Math.round(window.innerHeight - window.visualViewport.height);
+          if (implied > 60 && Math.abs(implied - kbH) > 24) {
+            kbCalls += 100;   // 埋点标记：这条来自 vv 兜底（≥100 即 vv 生效过）
+            setKbH(implied);
+          }
+        });
+      }
+    } catch (eVV) {}
     function pillChildrenFade(pill, op, dur, delay){
       var kids = pill.children;
       for (var i = 0; i < kids.length; i++) {
@@ -1339,10 +1338,10 @@
       }
       if (composerOpen || dock.classList.contains('zcode-popup-mode') ||
           dock.classList.contains('zcode-popup-present')) {
-        // v79②：双击宽限——图标单击唤出后 380ms 内改"隐形但可接"（opacity:0 仍收触摸，
+        // v79②：双击宽限——图标单击唤出后 520ms 内改"隐形但可接"（opacity:0 仍收触摸，
         // display:none 会收不到第二击），morph 替身从图标位起飞的同时图标淡出，无双影；
-        // 宽限窗外维持原瞬时隐藏
-        if (composerOpen && lastIconTapAt > 0 && Date.now() - lastIconTapAt < 380 && ic) {
+        // 宽限窗外维持原瞬时隐藏。窗口=双击判定 500ms + 20ms 余量
+        if (composerOpen && lastIconTapAt > 0 && Date.now() - lastIconTapAt < 520 && ic) {
           ic.style.opacity = '0';
           updateGestureExclude();
           return;
@@ -1475,152 +1474,6 @@
         }
       }
       uiLog('composer-hide');
-    }
-
-    // ---------- v79⑧：长按消息快捷菜单（复制全文 / 引用） ----------
-    // 长按 520ms 且位移 <10px → 底部动作条。z.ai 行本身支持原生长按文本选择：菜单出现
-    // 后 420ms 内若发生 selectionchange/contextmenu（原生选择已接管）就自动让位收起，
-    // 两套长按行为互斥不叠加。落点排除 textarea/按钮/代码块——这些位置长按有原生语义。
-    var msgSheet = null, msgSheetCatcher = null, lp = null;
-    function hideMsgSheet(){
-      if (msgSheetCatcher) {
-        try { msgSheetCatcher.parentNode.removeChild(msgSheetCatcher); } catch (e0) {}
-        msgSheetCatcher = null;
-      }
-      if (!msgSheet) { return; }
-      var el = msgSheet; msgSheet = null;
-      if (ANIM_ON && !REDUCED) {
-        el.style.animation = 'zcodeFadeDownNoX 0.18s ease-in';
-        var done = function(){ if (el.parentNode) { el.parentNode.removeChild(el); } };
-        el.addEventListener('animationend', done, {once: true});
-        setTimeout(done, 420);
-      } else {
-        try { el.parentNode.removeChild(el); } catch (e1) {}
-      }
-    }
-    function rowCleanText(row){
-      var clone = row.cloneNode(true);
-      var btns = clone.querySelectorAll ? clone.querySelectorAll(TURN_NOISE_SEL) : [];
-      for (var i = 0; i < btns.length; i++) {
-        if (btns[i].parentNode) { btns[i].parentNode.removeChild(btns[i]); }
-      }
-      return (clone.textContent || '').trim();
-    }
-    function copyText(txt2){
-      try {
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(txt2).then(function(){ hint('已复制'); }, function(){ copyTextFallback(txt2); });
-          return;
-        }
-      } catch (eC) {}
-      copyTextFallback(txt2);
-    }
-    function copyTextFallback(txt2){
-      try {
-        var ta = doc.createElement('textarea');
-        ta.value = txt2;
-        ta.style.cssText = 'position:fixed;left:-999px;top:0';
-        (doc.body || doc.documentElement).appendChild(ta);
-        ta.select();
-        doc.execCommand('copy');
-        ta.parentNode.removeChild(ta);
-        hint('已复制');
-      } catch (eF) { hint('复制失败，长按文本手动选择'); }
-    }
-    function sheetBtn(label, fn){
-      var b = doc.createElement('div');
-      b.textContent = label;
-      b.setAttribute('role', 'button');
-      b.style.cssText = 'flex:1;text-align:center;padding:13px 6px;color:var(--zc-text);font-size:14px;' +
-        'cursor:pointer;border-radius:10px;';
-      b.addEventListener('touchstart', function(){ b.style.background = 'var(--zc-hover)'; }, {passive:true});
-      b.addEventListener('touchend', function(){ b.style.background = ''; }, {passive:true});
-      b.addEventListener('click', fn);
-      return b;
-    }
-    function showMsgSheet(row){
-      hideMsgSheet();
-      msgSheet = doc.createElement('div');
-      msgSheet.id = 'zcode-msg-sheet';
-      msgSheet.style.cssText = 'position:fixed;left:50%;bottom:calc(14px + var(--zc-safe-b, 0px));transform:translateX(-50%);' +
-        'width:min(320px, 88vw);background:var(--zc-bg-strong);border:1px solid var(--zc-stroke);border-radius:16px;' +
-        '-webkit-backdrop-filter:blur(22px) saturate(1.4);backdrop-filter:blur(22px) saturate(1.4);' +
-        'display:flex;gap:4px;padding:6px;z-index:100000;box-shadow:0 14px 44px rgba(0,0,0,0.55);' +
-        anim('zcodeFadeUpNoX', '0.18s', 'cubic-bezier(0.2,0.8,0.2,1)');
-      msgSheet.appendChild(sheetBtn('复制全文', function(){
-        hideMsgSheet();
-        copyText(rowCleanText(row));
-      }));
-      msgSheet.appendChild(sheetBtn('引用', function(){
-        hideMsgSheet();
-        showComposer();
-        setTimeout(function(){
-          var dk = getDock();
-          var ta = dk ? dk.querySelector('[data-testid^="v4-composer-input"], textarea') : null;
-          if (!ta) { return; }
-          var q = '> ' + (rowCleanText(row).replace(/\s+/g, ' ').trim().slice(0, 140)) + '\n';
-          try {
-            var dsc = (window.HTMLTextAreaElement && Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value'));
-            if (dsc && dsc.set) { dsc.set.call(ta, q); } else { ta.value = q; }
-          } catch (eS2) { ta.value = q; }
-          ta.dispatchEvent(new Event('input', {bubbles: true}));
-          try { ta.focus(); } catch (eF2) {}   // 引用后聚焦：用户意图就是继续写
-        }, 380);
-      }));
-      (isShadow ? root : doc.body || doc.documentElement).appendChild(msgSheet);
-      msgSheetCatcher = doc.createElement('div');
-      msgSheetCatcher.id = 'zcode-msg-sheet-catcher';
-      msgSheetCatcher.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0);touch-action:none;';
-      msgSheetCatcher.addEventListener('touchstart', function(e){ e.preventDefault(); hideMsgSheet(); }, {passive:false});
-      msgSheetCatcher.addEventListener('mousedown', function(){ hideMsgSheet(); });
-      (isShadow ? root : doc.body || doc.documentElement).appendChild(msgSheetCatcher);
-      // 原生选择让位：菜单出现后短时间内出现选择/上下文菜单 → 收我们的
-      var yieldToNative = function(){ hideMsgSheet(); };
-      setTimeout(function(){
-        try { doc.removeEventListener('selectionchange', yieldToNative, true); } catch (eY1) {}
-        try { evRoot.removeEventListener('contextmenu', yieldToNative, true); } catch (eY2) {}
-      }, 420);
-      try { doc.addEventListener('selectionchange', yieldToNative, true); } catch (eY3) {}
-      try { evRoot.addEventListener('contextmenu', yieldToNative, true); } catch (eY4) {}
-      uiLog('msg-sheet');
-    }
-    function onLpStart(e){
-      lp = null;
-      if (!longPressMenu || !UI_ON || msgSheet) { return; }
-      if (e.touches && e.touches.length !== 1) { return; }
-      var t = evXY(e);
-      var tg = e.target;
-      if (!tg || !tg.closest) { return; }
-      if (tg.closest('textarea, input, select, button, a, [role="button"], code, pre, [data-v4-composer-dock="true"]')) { return; }
-      var row = tg.closest('[data-testid^="v4-row"]');
-      if (!row) { return; }
-      var box = { x: t.clientX, y: t.clientY, row: row, timer: 0 };
-      box.timer = setTimeout(function(){
-        if (lp === box && box.row.isConnected) { showMsgSheet(box.row); }
-        lp = null;
-      }, 520);
-      lp = box;
-    }
-    function onLpMove(e){
-      if (!lp) { return; }
-      var t = evXY(e);
-      if (Math.abs(t.clientX - lp.x) > 10 || Math.abs(t.clientY - lp.y) > 10) {
-        clearTimeout(lp.timer);
-        lp = null;
-      }
-    }
-    function onLpEnd(){
-      if (lp) { clearTimeout(lp.timer); lp = null; }
-    }
-    if (UI_ON) {
-      evRoot.addEventListener('touchstart', onLpStart, {passive:true});
-      evRoot.addEventListener('touchmove', onLpMove, {passive:true});
-      evRoot.addEventListener('touchend', onLpEnd, {passive:true});
-      evRoot.addEventListener('touchcancel', onLpEnd, {passive:true});
-      evRoot.addEventListener('scroll', function(){
-        if (msgSheet) { hideMsgSheet(); }
-        onLpEnd();
-      }, {passive:true, capture:true});
     }
 
     // ---------- 兜底手势：左缘上滑×3 + 右缘下滑×3（组合手势，诊断入口，不在任何 UI 文案里暴露） ----------

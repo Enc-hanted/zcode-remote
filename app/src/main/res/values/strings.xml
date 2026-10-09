@@ -32,8 +32,6 @@
     <string name="settings_restore_on_bottom_sub">收纳状态下滚到全部消息最底端时，输入框自动滑出；关闭后只能点左下角图标唤出</string>
     <string name="settings_send_minimize">发送后归位</string>
     <string name="settings_send_minimize_sub">发送消息后输入框自动收纳，回复全屏阅读；关闭后发送完输入框保持展开</string>
-    <string name="settings_long_press_menu">长按消息快捷菜单</string>
-    <string name="settings_long_press_menu_sub">长按消息出"复制全文/引用"动作条；长按文字本身仍是系统长按选择</string>
     <string name="settings_kb_follow_exp">键盘跟随·实验</string>
     <string name="settings_kb_follow_exp_sub">键盘起落时页面不再整体缩放，输入胶囊贴键盘顶沿平滑升降（更顺滑；异常请关闭）</string>
     <string name="settings_amoled_black">纯黑 AMOLED·实验</string>

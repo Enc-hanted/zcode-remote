@@ -181,7 +181,7 @@
     function diagInfo(){
       var de = doc.documentElement;
       var out = {
-        bundleVer: 56,
+        bundleVer: 57,
         // v70：实机"动画不生效/交互生硬"排查项——系统减弱动效（REDUCED）会关掉全部注入
         // 动画；safeB 是原生边到边上报的底部安全区（0 = 旧壳/桌面/未上报）
         animOn: ANIM_ON,
@@ -347,15 +347,17 @@
         out.composerProbe = liveDock ? ('hit cls=' + (liveDock.className || '').slice(0, 60) +
           ' hasExpand=' + (liveDock.querySelector('#zcode-composer-expand') ? 1 : 0)) : 'miss';
       } catch (e) { out.composerProbe = 'err'; }
-      // v79：新交互特性状态（①发送归位 ③键盘实验 ⑤骨架 ⑥阅读线 ⑦抬升 ⑧长按 ⑨AMOLED）
+      // v79/v80：新交互特性状态（①发送归位 ③键盘实验 ⑤骨架 ⑥阅读线 ⑦↓钮CSS抬升 ⑨AMOLED）
+      // kbCalls/kbAgo：__zcKb 桥接埋点——kbCalls=0 表示原生从没报过高度（桥断），
+      // ≥100 表示 visualViewport 兜底生效过；kbAgo=距最近一次上报的秒数
       try {
         out.feats = {
           sendMin: sendMinimize ? 1 : 0, kbExp: kbFollowExp ? 1 : 0,
-          kbH: kbH || 0, kbLift: kbLift || 0,
-          lpMenu: longPressMenu ? 1 : 0, amoled: amoledBlack ? 1 : 0,
+          kbH: kbH || 0, kbLift: kbLift || 0, kbCalls: kbCalls || 0,
+          kbAgo: kbLastAt ? Math.round((Date.now() - kbLastAt) / 1000) : -1,
+          amoled: amoledBlack ? 1 : 0,
           skShown: (typeof skShown === 'number' ? skShown : 0),
-          readLine: readLineEl ? 1 : 0,
-          liftLog: (liftLog || []).slice(-3)
+          readLine: readLineEl ? 1 : 0
         };
       } catch (eFT) { out.feats = 'err'; }
       out.bars = 'top=' + (lastTop ? lastTop.r + ',' + lastTop.g + ',' + lastTop.b : 'null') +

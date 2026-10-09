@@ -92,13 +92,6 @@ class SettingsActivity : AppCompatActivity() {
             settings.kbFollowExp = checked
         }
 
-        // v79⑧：长按消息快捷菜单
-        val switchLongPressMenu = findViewById<MaterialSwitch>(R.id.switchLongPressMenu)
-        switchLongPressMenu.isChecked = settings.longPressMenu
-        switchLongPressMenu.setOnCheckedChangeListener { _, checked ->
-            settings.longPressMenu = checked
-        }
-
         // v79⑨：纯黑 AMOLED（实验）
         val switchAmoledBlack = findViewById<MaterialSwitch>(R.id.switchAmoledBlack)
         switchAmoledBlack.isChecked = settings.amoledBlack
