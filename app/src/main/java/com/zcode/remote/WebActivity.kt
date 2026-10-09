@@ -259,13 +259,15 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
         'html.zcode-float-on [data-testid="v4-timeline"] [style*="mask-position"],' +
         'html.zcode-float-on [data-testid="v4-timeline-scroll"] [style*="mask-position"]' +
         '{-webkit-mask-image:none!important;mask-image:none!important}' +
-        // v80⑦：z.ai 原生"滚动到底部"圆钮避让系统手势条（实机诊断 dockHtml/popupSnap 取证：
-        // v4-timeline-bottom 挂在 dock 内 data-v4-back-to-bottom-anchor 锚上，absolute/
-        // bottom-full/mb-2 悬在 0 高 dock 上方，收纳态离屏底仅 ~8px 压小白条）。transform
-        // 整体重写并复刻它自带的 -translate-x-1/2 居中：抬高 安全区+6px（原 8px 底距 +
+        // v80⑦→v81：z.ai 原生"滚动到底部"圆钮避让系统手势条（实机取证：v4-timeline-bottom
+        // 挂在 dock 内 back-to-bottom-anchor 锚上，absolute/bottom-full/mb-2 悬在 0 高 dock
+        // 上方，收纳态离屏底仅 ~8px 压小白条）。v81 关键教训：它的水平居中是 Tailwind v4 的
+        // -translate-x-1/2 → 独立 translate 属性（不是 transform），translate 与 transform
+        // 两属性叠加生效——规则里再写 translateX(-50%) 就是二次左移半个钮宽（实机
+        // "↓钮不居中"根因）。这里只写 Y 分量：抬高 安全区+6px（原 8px 底距 +
         // 抬升量 ≥ safeB+10 的避让口径）。safeB=0（桌面/旧壳）时只抬 6px，无感
         'html.zcode-float-on [data-testid="v4-timeline-bottom"]' +
-        '{transform:translate(-50%, calc(-6px - var(--zc-safe-b, 0px)))!important}' +
+        '{transform:translateY(calc(-6px - var(--zc-safe-b, 0px)))!important}' +
         // v78 让位垫过渡：胶囊唤出/收纳时 tl 的 padding-bottom 变化不再是瞬时跳变，
         // 而是短滑过渡——垫的写入时机已挪到 morph 落位之后（06_composer），配合这条
         // 过渡整个"消息列表为胶囊让位"的动作是连续的。仅收纳态生效，不干扰 z.ai
@@ -312,17 +314,8 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
         '--zc-stroke-strong:rgba(255,255,255,0.16)}' +
         'html.zc-amoled body,html.zc-amoled [data-testid="v4-timeline"],html.zc-amoled [data-testid="v4-timeline-scroll"]' +
         '{background-color:#000!important}' +
-        // v79③ 键盘跟随·实验：WebView 不随 IME 缩放（原生 exp 模式不垫 ime padding，页面
-        // 零重排、虚拟列表不再逐帧重算），键盘起/落各报一次最终高度（__zcKb），JS 换算
-        // --zc-kb-lift，胶囊/全屏用 CSS 过渡贴着键盘顶沿升降。掉帧根修的实验路径。
-        // 特定性注意：选择器必须比上面的 float/full 基础规则多一级（html.zcode-float-on
-        // 前缀），否则同为 (0,3,2) 时基础规则的 transform 会盖掉这里的 translateY
-        'html.zcode-float-on.zc-kb-on [data-v4-composer-dock="true"].zcode-composer-float{' +
-        'transform:translateX(-50%) translateY(calc(0px - var(--zc-kb-lift, 0px)))!important;' +
-        'transition:transform 0.26s cubic-bezier(0.2,0.8,0.2,1)!important}' +
-        'html.zcode-float-on.zc-kb-on [data-v4-composer-dock="true"].zcode-composer-full{' +
-        'transform:translateY(calc(0px - var(--zc-kb-lift, 0px)))!important;' +
-        'transition:transform 0.26s cubic-bezier(0.2,0.8,0.2,1)!important}' +
+        // v79③ 键盘跟随·实验已整套删除（v81，用户淘汰）：WebView 恢复 v72 行为——
+        // 键盘把 content 垫高、WebView 随之缩放，页面自己坐到键盘上方，注入层零参与
         // 弹窗模式：dock 临时显示为底部容器（不遮挡全屏），输入部分隐藏，弹窗可见可点
         // 容器变换进行中：压掉 float/full 态的入场 animation，几何交给 JS 的 transform 过渡
         '[data-v4-composer-dock="true"].zcode-composer-morph{animation:none!important}' +
@@ -378,14 +371,27 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
         'html.zcode-float-on [data-v4-composer-dock="true"] [data-testid="v4-composer"] .rounded-2xl{' +
         'box-shadow:0 12px 40px rgba(0,0,0,0.5)!important;overflow:visible!important;' +
         '}' +
-        // 全屏态：dock 变全屏遮罩 + 底部居中；气泡放大、加投影
+        // 全屏态：dock 变全屏遮罩 + 底部居中；气泡放大、加投影。
+        // v81：translate:none 与 transform:none 并列——Tailwind v4 的位移工具类走独立
+        // translate 属性，只归零 transform 拦不住它（↓钮二次左移的同源教训）
         'html.zcode-float-on [data-v4-composer-dock="true"].zcode-composer-full{' +
         'display:flex!important;visibility:visible!important;pointer-events:auto!important;position:fixed!important;left:0!important;right:0!important;bottom:0!important;top:0!important;' +
-        'transform:none!important;width:100%!important;max-width:none!important;height:100%!important;' +
+        'transform:none!important;translate:none!important;width:100%!important;max-width:none!important;height:100%!important;' +
         'z-index:99999!important;pointer-events:auto!important;align-items:flex-end!important;justify-content:center!important;' +
         'padding:0 0 calc(20px + var(--zc-safe-b, 0px))!important;background:rgba(0,0,0,0.55)!important;border:none!important;' +
         anim('zcodeFadeIn', '0.18s', 'ease-out') +
         '}' +
+        // v81 全屏面板水平居中根修（实机"半屏输入不居中"）：全屏几何在注入层本是对称的
+        // （inset 0 + flex 居中 + 面板宽 min(94vw,640px)），偏移来自 z.ai 原生 dock 内层
+        // 在全屏态残留的 padding/margin（原生 px-*/ml-* 一类会不对称挤压内容盒）——
+        // float/full 两态一并中和（悬浮态真机实测居中，说明真页干扰同样不该存在）；
+        // width:100% 对齐真页 w-full（dock 是 flex，缺了它内容层 shrink-to-fit 塌缩），
+        // 全屏面板再由 margin-inline:auto 强制居中，不依赖原生内层的自觉
+        'html.zcode-float-on [data-v4-composer-dock="true"].zcode-composer-float [data-v4-composer-dock-content],' +
+        'html.zcode-float-on [data-v4-composer-dock="true"].zcode-composer-full [data-v4-composer-dock-content]' +
+        '{padding:0!important;margin:0!important;width:100%!important}' +
+        'html.zcode-float-on [data-v4-composer-dock="true"].zcode-composer-full [data-testid="v4-composer"]' +
+        '{margin-left:auto!important;margin-right:auto!important}' +
         'html.zcode-float-on [data-v4-composer-dock="true"].zcode-composer-full.zcode-composer-closing{' +
         'pointer-events:none!important;' + anim('zcodeFadeOut', '0.18s', 'ease-in') + '}' +
         'html.zcode-float-on [data-v4-composer-dock="true"].zcode-composer-full [data-testid="v4-composer"]{' +
@@ -724,7 +730,7 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
     function diagInfo(){
       var de = doc.documentElement;
       var out = {
-        bundleVer: 57,
+        bundleVer: 58,
         // v70：实机"动画不生效/交互生硬"排查项——系统减弱动效（REDUCED）会关掉全部注入
         // 动画；safeB 是原生边到边上报的底部安全区（0 = 旧壳/桌面/未上报）
         animOn: ANIM_ON,
@@ -890,14 +896,11 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
         out.composerProbe = liveDock ? ('hit cls=' + (liveDock.className || '').slice(0, 60) +
           ' hasExpand=' + (liveDock.querySelector('#zcode-composer-expand') ? 1 : 0)) : 'miss';
       } catch (e) { out.composerProbe = 'err'; }
-      // v79/v80：新交互特性状态（①发送归位 ③键盘实验 ⑤骨架 ⑥阅读线 ⑦↓钮CSS抬升 ⑨AMOLED）
-      // kbCalls/kbAgo：__zcKb 桥接埋点——kbCalls=0 表示原生从没报过高度（桥断），
-      // ≥100 表示 visualViewport 兜底生效过；kbAgo=距最近一次上报的秒数
+      // v79：新交互特性状态（①发送归位 ⑤骨架 ⑥阅读线 ⑨AMOLED）
+      // v81：③键盘跟随已删除，kbExp/kbH/kbLift/kbCalls/kbAgo 字段退役
       try {
         out.feats = {
-          sendMin: sendMinimize ? 1 : 0, kbExp: kbFollowExp ? 1 : 0,
-          kbH: kbH || 0, kbLift: kbLift || 0, kbCalls: kbCalls || 0,
-          kbAgo: kbLastAt ? Math.round((Date.now() - kbLastAt) / 1000) : -1,
+          sendMin: sendMinimize ? 1 : 0,
           amoled: amoledBlack ? 1 : 0,
           skShown: (typeof skShown === 'number' ? skShown : 0),
           readLine: readLineEl ? 1 : 0
@@ -1017,14 +1020,14 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
       title.style.cssText = 'font-size:13px;font-weight:600;color:var(--zc-text-2);margin-bottom:8px;';
       var pre = doc.createElement('div');
       pre.style.cssText = 'white-space:pre-wrap;word-break:break-all;';
-      pre.textContent = text;
+""" +
+"""      pre.textContent = text;
       var copy = doc.createElement('div');
       copy.textContent = '复制诊断';
       copy.style.cssText = 'margin-top:10px;text-align:center;color:var(--zc-text-2);background:rgba(255,255,255,0.10);' +
         'border:1px solid var(--zc-stroke-soft);padding:10px;border-radius:var(--zc-radius);font-size:13px;font-weight:600;cursor:pointer;';
       copy.onclick = function(){
-""" +
-"""        var ta = doc.createElement('textarea');
+        var ta = doc.createElement('textarea');
         ta.value = text;
         ta.style.cssText = 'position:fixed;left:-9999px;top:0;';
         (doc.body || doc.documentElement).appendChild(ta);
@@ -1060,24 +1063,6 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
       mask.id = 'zcode-mask';   // v53：body 弹窗检测让位时需要能定位到遮罩
       mask.style.cssText = 'position:fixed;inset:0;z-index:99995;background:rgba(0,0,0,0);';
       mask.addEventListener('touchstart', function(e){
-        // v80②：双击回退——真机上第二击常落在 44px 图标之外的遮罩上（图标首击唤出后
-        // 已隐形，全凭肌肉记忆点）。500ms 内 + 距首击落点 120px 以内的快速触摸，视为
-        // 双击第二击直进全屏，不当作"点外部收起"
-        if (lastIconTapAt > 0 && Date.now() - lastIconTapAt < 500 && composerOpen && !composerFull) {
-          var t0 = (e.touches && e.touches[0]) || e;
-          var dx = lastIconTapXY ? (t0.clientX - lastIconTapXY.x) : 999;
-          var dy = lastIconTapXY ? (t0.clientY - lastIconTapXY.y) : 999;
-          if (dx * dx + dy * dy < 120 * 120) {
-            e.preventDefault();
-            lastIconTapAt = 0;
-            uiLog('icon-dbltap-mask');
-            vibrate();
-            whenMorphDone(function(){
-              if (composerOpen && !composerFull) { toggleFullComposer(); }
-            });
-            return;
-          }
-        }
         e.preventDefault();
         closePanel();
         hideNav();
@@ -1611,8 +1596,6 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
     // 触摸走 touch 系；桌面 Chrome 直接用鼠标时没有 touch 事件，pointer 系(mouse/pen)兜底。
     // pointer 处理器对 pointerType==='touch' 一律放行，避免移动端 touch+pointer 双触发。
     var iconTrack = null;
-    var lastIconTapAt = 0;   // v79②：最近一次图标单击时刻（双击直进全屏的判据）
-    var lastIconTapXY = null;   // v80②：该次单击的落点（第二击落在图标旁的遮罩上也算双击）
     function evXY(e){
       if (e.touches) { return e.touches[0]; }
       return e;
@@ -1673,24 +1656,9 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
       iconRelease(ic);
       // touchend 用 changedTouches（手指离开位置），pointerup 用事件自身坐标
       var t = e.changedTouches ? e.changedTouches[0] : e;
-      // v80②：容差 10→14px——真机手指起落天然带十几像素漂移，紧容差把正常双击拍成
-      // "非 tap"（mock 合成事件零漂移所以本地测不出）；双击窗口 330→500ms 同理
+      // 14px 容差：真机手指起落天然带十几像素漂移，紧容差会漏判 tap（v80② 定的值，
+      // 双击删除后保留——单击判据本身受益）
       if (Date.now() - tr.t0 < 400 && Math.abs(t.clientX - tr.x) < 14 && Math.abs(t.clientY - tr.y) < 14) {
-        var now = Date.now();
-        if (now - lastIconTapAt < 500) {
-          // v79②：双击直进全屏。首击已唤出浮动胶囊（图标在宽限窗内隐形但可接——见
-          // ensureIcon），第二击落点仍是图标：等 morph 飞行结束再切全屏，避免两段
-          // 变换的 morphTok 互相打架（替身清理被顶掉会漏出隐藏的真身）
-          uiLog('icon-dbltap-full');
-          vibrate();
-          lastIconTapAt = 0;
-          whenMorphDone(function(){
-            if (composerOpen && !composerFull) { toggleFullComposer(); }
-          });
-          return;
-        }
-        lastIconTapAt = now;
-        lastIconTapXY = { x: tr.x, y: tr.y };   // v80②：遮罩回退用（第二击落图标旁也算双击）
         uiLog('icon-tap');
         showComposer();
       }
@@ -1956,7 +1924,6 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
     // v80：⑧长按菜单用户淘汰已整套删除（longPressMenu 键随之退役，旧存档多出的键无害）
     var ZSET = (window.__zcSettings = window.__zcSettings || {});
     var sendMinimize = (ZSET.sendMinimize !== false);      // ① 发送后归位（默认开）
-    var kbFollowExp = (ZSET.kbFollowExp === true);          // ③ 键盘跟随·实验（默认关）
     var amoledBlack = (ZSET.amoledBlack === true);          // ⑨ 纯黑 AMOLED（默认关）
     function applyAmoled(){
       try { doc.documentElement.classList.toggle('zc-amoled', amoledBlack); } catch (e) {}
@@ -2159,8 +2126,7 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
         if (el.closest('#zcode-mask, #zcode-fallback-nav, #zcode-nav-hint, #zcode-nav-preview, #zcode-diag-card')) { return false; }
         if (el.closest('[data-v4-composer-dock="true"]')) { return false; }
         var cs = getComputedStyle(el);
-""" +
-"""        if (cs.position !== 'fixed' && cs.position !== 'absolute') { return false; }
+        if (cs.position !== 'fixed' && cs.position !== 'absolute') { return false; }
         var z = parseInt(cs.zIndex, 10);
         // 高于页面内容（z-20/30），低于我们的注入层（99990）——页面自己的弹窗区间
         if (!(z > 25 && z < 99990)) { return false; }
@@ -2194,7 +2160,8 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
         }
       } catch (e) {}
       var html = doc.documentElement;
-      if (!html) { return; }   // shadow root 没有 documentElement
+""" +
+"""      if (!html) { return; }   // shadow root 没有 documentElement
       if (found) { html.classList.add('zcode-body-popup'); }
       else { html.classList.remove('zcode-body-popup'); }
     }
@@ -2675,7 +2642,6 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
       // v79⑥：流式增长跟踪（阅读位置线的"正在流式"判据）+ 阅读线保洁
       trackStreamGrow();
       if (readLineEl && (!streamingNow() || !readLineEl.isConnected)) { removeReadLine(true); }
-      applyKbLift();   // v79③：键盘实验模式——胶囊高度变化（多行）时重算抬升量
       // 按钮是胶囊的子节点，位置不随状态变化（只依赖半径），无需再定位
     }
     // 按钮中心对准胶囊右上角圆角圆心。按钮是胶囊的 absolute 子节点，所以只按半径算偏移，
@@ -2716,57 +2682,9 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
       lastSafeB = b;
       try { doc.documentElement.style.setProperty('--zc-safe-b', b + 'px'); } catch (e) {}
     }
-    // ---------- v79③：键盘跟随·实验 ----------
-    // 原生 exp 模式不缩放 WebView（页面零重排），键盘起/落各报一次最终高度（__zcKb）。
-    // 这里换算"需要抬升的像素"：胶囊底缘越过键盘顶沿多少就抬多少，且不超过
-    // (胶囊顶缘-8px)——全屏态胶囊很高时只抬差值，不顶出屏。CSS 过渡（02_style
-    // zc-kb-on 规则）让抬升本身是动画；1s 轮询里补算（多行输入胶囊变高时重算）。
-    var kbH = 0, kbLift = 0;
-    var kbCalls = 0, kbLastAt = 0;   // v80③：桥接埋点——下次诊断分辨"原生没报"vs"报了没生效"
-    function calcKbLift(){
-      if (kbH <= 0 || !composerOpen) { return 0; }
-      var dk = getDock();
-      var pill = dk ? dk.querySelector('.rounded-2xl') : null;
-      if (!pill || !pill.offsetWidth) { return 0; }
-      var r = pill.getBoundingClientRect();
-      var overflow = r.bottom - (window.innerHeight - kbH);
-      if (overflow <= 0) { return 0; }
-      return Math.max(0, Math.min(overflow, r.top - 8));
-    }
-    function applyKbLift(){
-      var lift = calcKbLift();
-      if (lift === kbLift && (kbH > 0) === doc.documentElement.classList.contains('zc-kb-on')) { return; }
-      kbLift = lift;
-      try {
-        doc.documentElement.style.setProperty('--zc-kb-lift', lift + 'px');
-        doc.documentElement.classList.toggle('zc-kb-on', kbH > 0);
-      } catch (e) {}
-    }
-    function setKbH(h){
-      kbH = (typeof h === 'number' && h > 0 && h < window.innerHeight * 0.9) ? h : 0;
-      applyKbLift();
-    }
-    try {
-      window.__zcKb = function(h){
-        kbCalls++;
-        kbLastAt = Date.now();
-        setKbH(h);
-      };
-    } catch (eK0) {}
-    // v80③ 兜底：实验模式下若 WebView 未缩放但 Chromium 仍更新 visualViewport（部分
-    // 版本会），高度差直接当键盘高度用——原生桥（__zcKb）正常时两者一致，无害
-    try {
-      if (window.visualViewport && window.visualViewport.addEventListener) {
-        window.visualViewport.addEventListener('resize', function(){
-          if (!kbFollowExp || !composerOpen) { return; }
-          var implied = Math.round(window.innerHeight - window.visualViewport.height);
-          if (implied > 60 && Math.abs(implied - kbH) > 24) {
-            kbCalls += 100;   // 埋点标记：这条来自 vv 兜底（≥100 即 vv 生效过）
-            setKbH(implied);
-          }
-        });
-      }
-    } catch (eVV) {}
+    // ---------- v79③ 键盘跟随·实验已整套删除（v81，用户淘汰）----------
+    // WebView 恢复 v72 行为：原生把 IME inset 垫进 content，WebView 随键盘缩放，
+    // 页面自己坐到键盘上方——注入层不再接键盘高度、不再算抬升（__zcKb 桥退役）
     function pillChildrenFade(pill, op, dur, delay){
       var kids = pill.children;
       for (var i = 0; i < kids.length; i++) {
@@ -2879,16 +2797,6 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
         pillChildrenFade(pill, '1', 0.12, 0);
       });
     }
-    // v79②：等 morph/closing 动画窗口过去再执行 fn（双击直进全屏要避开飞行窗口，
-    // 两段 morph 的 morphTok 会互相顶掉对方的替身清理，漏出隐藏中的真身）
-    function whenMorphDone(fn, tries){
-      var dk = getDock();
-      if (dk && (dk.classList.contains('zcode-composer-morph') || dk.classList.contains('zcode-composer-closing'))) {
-        if ((tries || 0) < 14) { setTimeout(function(){ whenMorphDone(fn, (tries || 0) + 1); }, 60); }
-        return;
-      }
-      fn();
-    }
     // ---------- 左下角收纳图标（v66 悬浮化）：有消息未唤出时的唯一底栏元素 ----------
     // 挂在 body 层 fixed 悬浮（不占流内空间，消息列表直接铺到屏幕底部）；
     // dock 收纳态高度为 0（见 fxStyle 零占位规则），页面让位计算随之归零。
@@ -2904,16 +2812,8 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
       }
       if (composerOpen || dock.classList.contains('zcode-popup-mode') ||
           dock.classList.contains('zcode-popup-present')) {
-        // v79②：双击宽限——图标单击唤出后 520ms 内改"隐形但可接"（opacity:0 仍收触摸，
-        // display:none 会收不到第二击），morph 替身从图标位起飞的同时图标淡出，无双影；
-        // 宽限窗外维持原瞬时隐藏。窗口=双击判定 500ms + 20ms 余量
-        if (composerOpen && lastIconTapAt > 0 && Date.now() - lastIconTapAt < 520 && ic) {
-          ic.style.opacity = '0';
-          updateGestureExclude();
-          return;
-        }
         // 唤出态/弹窗态藏图标：与输入框的切换由容器变换负责，这里瞬时切换
-        if (ic) { ic.style.display = 'none'; ic.style.opacity = ''; }
+        if (ic) { ic.style.display = 'none'; }
         updateGestureExclude();
         return;
       }
@@ -2935,7 +2835,6 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
         (isShadow ? root : doc.body || doc.documentElement).appendChild(ic);
       }
       ic.style.display = 'flex';
-      ic.style.opacity = '';   // v79②：清掉双击宽限期的隐形
       ic.style.transform = '';   // v69：清掉上次手势的跟手偏移，图标每次复出都从原位开始
       updateGestureExclude();
     }
@@ -3177,8 +3076,8 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
       if (o.restoreOnBottom !== undefined) { restoreOnBottom = (o.restoreOnBottom !== false); }
       // v79 新开关（同步进 window.__zcSettings，页面重载后的初始值也走它）
       // v80：⑧长按菜单已删除，longPressMenu 键退役（旧存档多出的键无害）
+      // v81：③键盘跟随已删除，kbFollowExp 键退役（旧存档多出的键无害）
       if (o.sendMinimize !== undefined) { sendMinimize = (o.sendMinimize !== false); ZSET.sendMinimize = sendMinimize; }
-      if (o.kbFollowExp !== undefined) { kbFollowExp = (o.kbFollowExp === true); ZSET.kbFollowExp = kbFollowExp; }
       if (o.amoledBlack !== undefined) { amoledBlack = (o.amoledBlack === true); ZSET.amoledBlack = amoledBlack; applyAmoled(); }
       // 滚动条热切（原生已注入原版，这里只在变化时加覆盖样式）
       if (o.scrollbar !== undefined) { setScrollbar(o.scrollbar); }
@@ -3198,8 +3097,7 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
     // 行 id 服务端稳定递增（诊断验证 1019→1216 跨重载成立），比固定时间窗精确，能压住 10 秒后才渲染的历史批次。
     var ANCHOR_MS = 5000, injectAt = Date.now(), anchor = 0;
     function updateAnchor(rid){
-""" +
-"""      var n = parseInt(rid, 10);
+      var n = parseInt(rid, 10);
       if (!isNaN(n) && n > anchor) { anchor = n; }
     }
     function isHistory(rid){
@@ -3299,7 +3197,8 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
       var rid = rowIdOf(row);
       if (!rid || watchers[rid] || doneRows[rid]) { return; }
       traceAdd('watch', rid, '');
-      var w = { row: row, lastLen: -1, stable: 0, timer: null };
+""" +
+"""      var w = { row: row, lastLen: -1, stable: 0, timer: null };
       watchers[rid] = w;
       function tick(){
         if (doneRows[rid]) { delete watchers[rid]; return; }
@@ -3562,17 +3461,12 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
                 WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout(),
             )
             val ime = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
-            // v79③ 键盘跟随·实验：开关开启时不把 IME 垫进 content（WebView 不缩放，页面
-            // 零重排、虚拟列表不再逐帧重算），只把键盘最终高度报给 JS（__zcKb），胶囊由
-            // CSS 过渡贴键盘顶沿升降。实验关闭时维持 v72 行为（本监听垫高）
-            val kbExp = ::settings.isInitialized && settings.kbFollowExp
-            v.setPadding(bars.left, bars.top, bars.right, if (kbExp) 0 else ime)
-            if (kbExp) reportKb(ime)
+            v.setPadding(bars.left, bars.top, bars.right, ime)
             reportSafeB(if (ime > 0) 0 else bars.bottom)
             WindowInsetsCompat.CONSUMED
         }
         // 键盘起落动画期同步垫高：不加这段 padding 要等动画结束的最终分发才跳变，
-        // 页面会先被键盘盖一瞬再弹起（v79 实验模式同样跳过 ime 垫高，键盘期页面不缩放）
+        // 页面会先被键盘盖一瞬再弹起
         ViewCompat.setWindowInsetsAnimationCallback(
             contentView,
             object : WindowInsetsAnimationCompat.Callback(
@@ -3585,18 +3479,10 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
                     running: MutableList<WindowInsetsAnimationCompat>,
                 ): WindowInsetsCompat {
                     val imeNow = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
-                    val kbExpNow = ::settings.isInitialized && settings.kbFollowExp
-                    if (kbExpNow) {
-                        // v80③：实验模式在动画期也报高度——实机"键盘盖住输入框"排查：
-                        // 仅靠 onApply 报终值若哪一环没送到（分发时机/旧值），JS 全程
-                        // 不知道键盘来了。动画期按 ≥8px 步进补报，CSS 过渡自动平滑追
-                        reportKb(imeNow)
-                    } else {
-                        contentView.setPadding(
-                            contentView.paddingLeft, contentView.paddingTop,
-                            contentView.paddingRight, imeNow,
-                        )
-                    }
+                    contentView.setPadding(
+                        contentView.paddingLeft, contentView.paddingTop,
+                        contentView.paddingRight, imeNow,
+                    )
                     return insets
                 }
             },
@@ -3746,20 +3632,6 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
         }
     }
 
-    /** v79③ 键盘跟随·实验：IME 高度（CSS px）→ JS（__zcKb）。onApply 报动画终值，
-     *  v80 起 onProgress 动画期按步进补报（终值为主、中间值为保险——任一环送达即可）。
-     *  升降动画仍由页面侧 CSS 过渡完成。只在值跨 ≥8px 步进或归零时桥，不做逐帧。 */
-    private var lastKbH = -1
-
-    private fun reportKb(bottomPx: Int) {
-        if (!::settings.isInitialized || !::webView.isInitialized || webView.url == null) return
-        val css = (bottomPx / resources.displayMetrics.density).toInt()
-        if (css == lastKbH) return
-        if (lastKbH >= 0 && css > 0 && kotlin.math.abs(css - lastKbH) < 8) return   // 动画小步不桥
-        lastKbH = css
-        webView.evaluateJavascript("window.__zcKb&&window.__zcKb($css);void 0", null)
-    }
-
     /** 注入广播式修正包：样式 + 巡检器 + 导航手势 + 主题回报 + 回复监听（一次注入，广播到所有同源文档）。 */
     private fun injectMobileFix() {
         val css = StringBuilder(MOBILE_CSS)
@@ -3767,11 +3639,11 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
         // v70：先写 safeB 再执行 bundle；BODY 内首轮 syncComposer 会立即落 CSS 变量，
         // 不等 1s 轮询，避免真机首帧图标/输入框先贴到系统手势条再跳一下。
         // v79：会话页新开关走 window.__zcSettings（bundle 读它做初始值，applySettings 热更）
-        // v80：⑧长按菜单已删除（longPressMenu 键退役，旧页面存档多出的键无害）
+        // v80：⑧长按菜单已删除（longPressMenu 键退役）；v81：③键盘跟随已删除
+        //（kbFollowExp 键退役，旧页面存档多出的键无害）
         val js = "window.__zcodeSafeB=" + lastSafeB + ";" +
             "window.__zcSettings={" +
             "\"sendMinimize\":" + settings.sendMinimize + "," +
-            "\"kbFollowExp\":" + settings.kbFollowExp + "," +
             "\"amoledBlack\":" + settings.amoledBlack + "};" +
             "(" + BUNDLE_JS.trim() + ")(" +
             JSONObject.quote(css.toString()) + ", " +
@@ -3801,7 +3673,6 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
             "\"floatInput\":" + s.floatingInput + "," +
             "\"restoreOnBottom\":" + s.restoreOnBottom + "," +
             "\"sendMinimize\":" + s.sendMinimize + "," +
-            "\"kbFollowExp\":" + s.kbFollowExp + "," +
             "\"amoledBlack\":" + s.amoledBlack + "})"
         webView.evaluateJavascript(js, null)
     }

@@ -110,20 +110,27 @@
   <div data-v4-composer-dock="true">
     <!-- v80：真页同构——↓ 圆钮挂在 dock 内 back-to-bottom-anchor 锚上（absolute/
          bottom-full），收纳态（dock 0 高）悬在屏底 ~8px 处；02_style 的
-         [data-testid=v4-timeline-bottom] 静态 CSS 会抬它避让小白条 -->
+         [data-testid=v4-timeline-bottom] 静态 CSS 会抬它避让小白条。
+         v81：水平居中用 translate 属性（Tailwind v4 同构——-translate-x-1/2 编译成
+         translate:-50% 而非 transform；注入层规则只叠加 Y 分量，不再复刻 X） -->
     <div data-v4-back-to-bottom-anchor="composer-dock" style="position:relative">
       <button data-testid="v4-timeline-bottom" aria-label="滚动到底部"
-        style="position:absolute;bottom:100%;left:50%;transform:translateX(-50%);margin-bottom:8px;width:28px;height:28px;border-radius:50%;background:#222;color:#CCC;border:1px solid rgba(255,255,255,0.12);z-index:30">↓</button>
+        style="position:absolute;bottom:100%;left:50%;translate:-50%;margin-bottom:8px;width:28px;height:28px;border-radius:50%;background:#222;color:#CCC;border:1px solid rgba(255,255,255,0.12);z-index:30">↓</button>
     </div>
-    <div data-testid="v4-composer">
-      <div class="rounded-2xl">
-        <!-- v80：真页同构——v4-composer-input 是 contenteditable（Lexical），不是 textarea -->
-        <div data-testid="v4-composer-input" contenteditable="true" role="textbox" aria-placeholder="给 ZCode 发消息…"></div>
-        <button class="send">↑</button>
-      </div>
-      <!-- 仿真工具行（真页 v4-composer 自带 group/toolbar；span 不进手势排除名单，纯视觉） -->
-      <div class="group/toolbar" style="display:flex;align-items:center;gap:12px;padding:6px 4px 0;font-size:17px;color:#8F8F8F">
-        <span>＋</span><span style="color:#D08700">！</span><span>◫</span><span style="margin-left:auto">◷</span>
+    <!-- v81：真页同构——dock 内还有一层 z.ai 原生 dock-content 包装，这里故意带不对称
+         padding（模拟真页疑似的原生 px-*/ml-* 干扰）；全屏态注入规则会将其归零并用
+         margin:auto 强制居中面板——mock 不偏说明中和规则在工作 -->
+    <div data-v4-composer-dock-content style="padding:0 8px 0 24px">
+      <div data-testid="v4-composer">
+        <div class="rounded-2xl">
+          <!-- v80：真页同构——v4-composer-input 是 contenteditable（Lexical），不是 textarea -->
+          <div data-testid="v4-composer-input" contenteditable="true" role="textbox" aria-placeholder="给 ZCode 发消息…"></div>
+          <button class="send">↑</button>
+        </div>
+        <!-- 仿真工具行（真页 v4-composer 自带 group/toolbar；span 不进手势排除名单，纯视觉） -->
+        <div class="group/toolbar" style="display:flex;align-items:center;gap:12px;padding:6px 4px 0;font-size:17px;color:#8F8F8F">
+          <span>＋</span><span style="color:#D08700">！</span><span>◫</span><span style="margin-left:auto">◷</span>
+        </div>
       </div>
     </div>
   </div>
@@ -162,7 +169,6 @@
     <label><input type="checkbox" id="f_reply" checked>回复通知</label>
     <label><input type="checkbox" id="f_scroll" checked>隐藏滚动条</label>
     <label><input type="checkbox" id="f_send" checked>发送归位①</label>
-    <label><input type="checkbox" id="f_kb">键盘实验③</label>
     <label><input type="checkbox" id="f_amoled">AMOLED⑨</label>
     <button onclick="reloadWithFlags()">按勾选重新注入</button>
   </div>
@@ -213,7 +219,6 @@ async function inject() {
     // v79：会话页新开关（与 WebActivity.injectMobileFix 同形）
     window.__zcSettings = {
       sendMinimize: document.getElementById('f_send').checked,
-      kbFollowExp: document.getElementById('f_kb').checked,
       amoledBlack: document.getElementById('f_amoled').checked,
     };
     fn(css, f.navOn, f.replyOn, f.floatInput, f.uiAnim);
@@ -367,7 +372,6 @@ function simSafeB() {
 function reloadWithFlags() {
   localStorage.setItem('zcode_preview_flags', JSON.stringify(Object.assign(flags(), {
     send: document.getElementById('f_send').checked,
-    kb: document.getElementById('f_kb').checked,
     amoled: document.getElementById('f_amoled').checked,
   })));
   location.reload();
@@ -380,7 +384,6 @@ function reloadWithFlags() {
     if (saved.floatInput !== undefined) document.getElementById('f_float').checked = saved.floatInput;
     if (saved.uiAnim !== undefined) document.getElementById('f_anim').checked = saved.uiAnim;
     if (saved.send !== undefined) document.getElementById('f_send').checked = saved.send;
-    if (saved.kb !== undefined) document.getElementById('f_kb').checked = saved.kb;
     if (saved.amoled !== undefined) document.getElementById('f_amoled').checked = saved.amoled;
   } catch (e) {}
 })();

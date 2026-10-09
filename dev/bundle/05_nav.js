@@ -6,24 +6,6 @@
       mask.id = 'zcode-mask';   // v53：body 弹窗检测让位时需要能定位到遮罩
       mask.style.cssText = 'position:fixed;inset:0;z-index:99995;background:rgba(0,0,0,0);';
       mask.addEventListener('touchstart', function(e){
-        // v80②：双击回退——真机上第二击常落在 44px 图标之外的遮罩上（图标首击唤出后
-        // 已隐形，全凭肌肉记忆点）。500ms 内 + 距首击落点 120px 以内的快速触摸，视为
-        // 双击第二击直进全屏，不当作"点外部收起"
-        if (lastIconTapAt > 0 && Date.now() - lastIconTapAt < 500 && composerOpen && !composerFull) {
-          var t0 = (e.touches && e.touches[0]) || e;
-          var dx = lastIconTapXY ? (t0.clientX - lastIconTapXY.x) : 999;
-          var dy = lastIconTapXY ? (t0.clientY - lastIconTapXY.y) : 999;
-          if (dx * dx + dy * dy < 120 * 120) {
-            e.preventDefault();
-            lastIconTapAt = 0;
-            uiLog('icon-dbltap-mask');
-            vibrate();
-            whenMorphDone(function(){
-              if (composerOpen && !composerFull) { toggleFullComposer(); }
-            });
-            return;
-          }
-        }
         e.preventDefault();
         closePanel();
         hideNav();

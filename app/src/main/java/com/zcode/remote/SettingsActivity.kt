@@ -85,13 +85,6 @@ class SettingsActivity : AppCompatActivity() {
             settings.sendMinimize = checked
         }
 
-        // v79③：键盘跟随·实验
-        val switchKbFollowExp = findViewById<MaterialSwitch>(R.id.switchKbFollowExp)
-        switchKbFollowExp.isChecked = settings.kbFollowExp
-        switchKbFollowExp.setOnCheckedChangeListener { _, checked ->
-            settings.kbFollowExp = checked
-        }
-
         // v79⑨：纯黑 AMOLED（实验）
         val switchAmoledBlack = findViewById<MaterialSwitch>(R.id.switchAmoledBlack)
         switchAmoledBlack.isChecked = settings.amoledBlack

@@ -10,7 +10,6 @@ data class PageSettings(
     val floatingInput: Boolean,
     val restoreOnBottom: Boolean,
     val sendMinimize: Boolean,
-    val kbFollowExp: Boolean,
     val amoledBlack: Boolean,
 )
 
@@ -79,12 +78,6 @@ class SettingsStore(context: Context) {
         get() = prefs.getBoolean(KEY_SEND_MINIMIZE, true)
         set(v) = prefs.edit().putBoolean(KEY_SEND_MINIMIZE, v).apply()
 
-    /** v79③：键盘跟随·实验——WebView 不随键盘缩放（页面零重排），胶囊由 JS 贴键盘顶沿升降。
-     *  默认关：需实机验证后再常开（失败形态=胶囊被键盘盖住，切回即恢复） */
-    var kbFollowExp: Boolean
-        get() = prefs.getBoolean(KEY_KB_FOLLOW_EXP, false)
-        set(v) = prefs.edit().putBoolean(KEY_KB_FOLLOW_EXP, v).apply()
-
     /** v79⑨：纯黑 AMOLED（实验）——注入层换纯黑 token + 页面底面 best-effort 纯黑 */
     var amoledBlack: Boolean
         get() = prefs.getBoolean(KEY_AMOLED_BLACK, false)
@@ -112,7 +105,6 @@ class SettingsStore(context: Context) {
         floatingInput = floatingInput,
         restoreOnBottom = restoreOnBottom,
         sendMinimize = sendMinimize,
-        kbFollowExp = kbFollowExp,
         amoledBlack = amoledBlack,
     )
 
@@ -127,7 +119,6 @@ class SettingsStore(context: Context) {
         private const val KEY_FLOATING_INPUT = "floating_input"
         private const val KEY_RESTORE_ON_BOTTOM = "restore_on_bottom"
         private const val KEY_SEND_MINIMIZE = "send_minimize"
-        private const val KEY_KB_FOLLOW_EXP = "kb_follow_exp"
         private const val KEY_AMOLED_BLACK = "amoled_black"
         private const val KEY_LOGO_POS_SET = "logo_pos_set"
         private const val KEY_LOGO_X = "logo_x"

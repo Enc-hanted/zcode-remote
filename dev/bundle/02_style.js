@@ -90,13 +90,15 @@
         'html.zcode-float-on [data-testid="v4-timeline"] [style*="mask-position"],' +
         'html.zcode-float-on [data-testid="v4-timeline-scroll"] [style*="mask-position"]' +
         '{-webkit-mask-image:none!important;mask-image:none!important}' +
-        // v80⑦：z.ai 原生"滚动到底部"圆钮避让系统手势条（实机诊断 dockHtml/popupSnap 取证：
-        // v4-timeline-bottom 挂在 dock 内 data-v4-back-to-bottom-anchor 锚上，absolute/
-        // bottom-full/mb-2 悬在 0 高 dock 上方，收纳态离屏底仅 ~8px 压小白条）。transform
-        // 整体重写并复刻它自带的 -translate-x-1/2 居中：抬高 安全区+6px（原 8px 底距 +
+        // v80⑦→v81：z.ai 原生"滚动到底部"圆钮避让系统手势条（实机取证：v4-timeline-bottom
+        // 挂在 dock 内 back-to-bottom-anchor 锚上，absolute/bottom-full/mb-2 悬在 0 高 dock
+        // 上方，收纳态离屏底仅 ~8px 压小白条）。v81 关键教训：它的水平居中是 Tailwind v4 的
+        // -translate-x-1/2 → 独立 translate 属性（不是 transform），translate 与 transform
+        // 两属性叠加生效——规则里再写 translateX(-50%) 就是二次左移半个钮宽（实机
+        // "↓钮不居中"根因）。这里只写 Y 分量：抬高 安全区+6px（原 8px 底距 +
         // 抬升量 ≥ safeB+10 的避让口径）。safeB=0（桌面/旧壳）时只抬 6px，无感
         'html.zcode-float-on [data-testid="v4-timeline-bottom"]' +
-        '{transform:translate(-50%, calc(-6px - var(--zc-safe-b, 0px)))!important}' +
+        '{transform:translateY(calc(-6px - var(--zc-safe-b, 0px)))!important}' +
         // v78 让位垫过渡：胶囊唤出/收纳时 tl 的 padding-bottom 变化不再是瞬时跳变，
         // 而是短滑过渡——垫的写入时机已挪到 morph 落位之后（06_composer），配合这条
         // 过渡整个"消息列表为胶囊让位"的动作是连续的。仅收纳态生效，不干扰 z.ai
@@ -143,17 +145,8 @@
         '--zc-stroke-strong:rgba(255,255,255,0.16)}' +
         'html.zc-amoled body,html.zc-amoled [data-testid="v4-timeline"],html.zc-amoled [data-testid="v4-timeline-scroll"]' +
         '{background-color:#000!important}' +
-        // v79③ 键盘跟随·实验：WebView 不随 IME 缩放（原生 exp 模式不垫 ime padding，页面
-        // 零重排、虚拟列表不再逐帧重算），键盘起/落各报一次最终高度（__zcKb），JS 换算
-        // --zc-kb-lift，胶囊/全屏用 CSS 过渡贴着键盘顶沿升降。掉帧根修的实验路径。
-        // 特定性注意：选择器必须比上面的 float/full 基础规则多一级（html.zcode-float-on
-        // 前缀），否则同为 (0,3,2) 时基础规则的 transform 会盖掉这里的 translateY
-        'html.zcode-float-on.zc-kb-on [data-v4-composer-dock="true"].zcode-composer-float{' +
-        'transform:translateX(-50%) translateY(calc(0px - var(--zc-kb-lift, 0px)))!important;' +
-        'transition:transform 0.26s cubic-bezier(0.2,0.8,0.2,1)!important}' +
-        'html.zcode-float-on.zc-kb-on [data-v4-composer-dock="true"].zcode-composer-full{' +
-        'transform:translateY(calc(0px - var(--zc-kb-lift, 0px)))!important;' +
-        'transition:transform 0.26s cubic-bezier(0.2,0.8,0.2,1)!important}' +
+        // v79③ 键盘跟随·实验已整套删除（v81，用户淘汰）：WebView 恢复 v72 行为——
+        // 键盘把 content 垫高、WebView 随之缩放，页面自己坐到键盘上方，注入层零参与
         // 弹窗模式：dock 临时显示为底部容器（不遮挡全屏），输入部分隐藏，弹窗可见可点
         // 容器变换进行中：压掉 float/full 态的入场 animation，几何交给 JS 的 transform 过渡
         '[data-v4-composer-dock="true"].zcode-composer-morph{animation:none!important}' +
@@ -209,14 +202,27 @@
         'html.zcode-float-on [data-v4-composer-dock="true"] [data-testid="v4-composer"] .rounded-2xl{' +
         'box-shadow:0 12px 40px rgba(0,0,0,0.5)!important;overflow:visible!important;' +
         '}' +
-        // 全屏态：dock 变全屏遮罩 + 底部居中；气泡放大、加投影
+        // 全屏态：dock 变全屏遮罩 + 底部居中；气泡放大、加投影。
+        // v81：translate:none 与 transform:none 并列——Tailwind v4 的位移工具类走独立
+        // translate 属性，只归零 transform 拦不住它（↓钮二次左移的同源教训）
         'html.zcode-float-on [data-v4-composer-dock="true"].zcode-composer-full{' +
         'display:flex!important;visibility:visible!important;pointer-events:auto!important;position:fixed!important;left:0!important;right:0!important;bottom:0!important;top:0!important;' +
-        'transform:none!important;width:100%!important;max-width:none!important;height:100%!important;' +
+        'transform:none!important;translate:none!important;width:100%!important;max-width:none!important;height:100%!important;' +
         'z-index:99999!important;pointer-events:auto!important;align-items:flex-end!important;justify-content:center!important;' +
         'padding:0 0 calc(20px + var(--zc-safe-b, 0px))!important;background:rgba(0,0,0,0.55)!important;border:none!important;' +
         anim('zcodeFadeIn', '0.18s', 'ease-out') +
         '}' +
+        // v81 全屏面板水平居中根修（实机"半屏输入不居中"）：全屏几何在注入层本是对称的
+        // （inset 0 + flex 居中 + 面板宽 min(94vw,640px)），偏移来自 z.ai 原生 dock 内层
+        // 在全屏态残留的 padding/margin（原生 px-*/ml-* 一类会不对称挤压内容盒）——
+        // float/full 两态一并中和（悬浮态真机实测居中，说明真页干扰同样不该存在）；
+        // width:100% 对齐真页 w-full（dock 是 flex，缺了它内容层 shrink-to-fit 塌缩），
+        // 全屏面板再由 margin-inline:auto 强制居中，不依赖原生内层的自觉
+        'html.zcode-float-on [data-v4-composer-dock="true"].zcode-composer-float [data-v4-composer-dock-content],' +
+        'html.zcode-float-on [data-v4-composer-dock="true"].zcode-composer-full [data-v4-composer-dock-content]' +
+        '{padding:0!important;margin:0!important;width:100%!important}' +
+        'html.zcode-float-on [data-v4-composer-dock="true"].zcode-composer-full [data-testid="v4-composer"]' +
+        '{margin-left:auto!important;margin-right:auto!important}' +
         'html.zcode-float-on [data-v4-composer-dock="true"].zcode-composer-full.zcode-composer-closing{' +
         'pointer-events:none!important;' + anim('zcodeFadeOut', '0.18s', 'ease-in') + '}' +
         'html.zcode-float-on [data-v4-composer-dock="true"].zcode-composer-full [data-testid="v4-composer"]{' +

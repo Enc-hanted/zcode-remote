@@ -46,8 +46,6 @@
     // 触摸走 touch 系；桌面 Chrome 直接用鼠标时没有 touch 事件，pointer 系(mouse/pen)兜底。
     // pointer 处理器对 pointerType==='touch' 一律放行，避免移动端 touch+pointer 双触发。
     var iconTrack = null;
-    var lastIconTapAt = 0;   // v79②：最近一次图标单击时刻（双击直进全屏的判据）
-    var lastIconTapXY = null;   // v80②：该次单击的落点（第二击落在图标旁的遮罩上也算双击）
     function evXY(e){
       if (e.touches) { return e.touches[0]; }
       return e;
@@ -108,24 +106,9 @@
       iconRelease(ic);
       // touchend 用 changedTouches（手指离开位置），pointerup 用事件自身坐标
       var t = e.changedTouches ? e.changedTouches[0] : e;
-      // v80②：容差 10→14px——真机手指起落天然带十几像素漂移，紧容差把正常双击拍成
-      // "非 tap"（mock 合成事件零漂移所以本地测不出）；双击窗口 330→500ms 同理
+      // 14px 容差：真机手指起落天然带十几像素漂移，紧容差会漏判 tap（v80② 定的值，
+      // 双击删除后保留——单击判据本身受益）
       if (Date.now() - tr.t0 < 400 && Math.abs(t.clientX - tr.x) < 14 && Math.abs(t.clientY - tr.y) < 14) {
-        var now = Date.now();
-        if (now - lastIconTapAt < 500) {
-          // v79②：双击直进全屏。首击已唤出浮动胶囊（图标在宽限窗内隐形但可接——见
-          // ensureIcon），第二击落点仍是图标：等 morph 飞行结束再切全屏，避免两段
-          // 变换的 morphTok 互相打架（替身清理被顶掉会漏出隐藏的真身）
-          uiLog('icon-dbltap-full');
-          vibrate();
-          lastIconTapAt = 0;
-          whenMorphDone(function(){
-            if (composerOpen && !composerFull) { toggleFullComposer(); }
-          });
-          return;
-        }
-        lastIconTapAt = now;
-        lastIconTapXY = { x: tr.x, y: tr.y };   // v80②：遮罩回退用（第二击落图标旁也算双击）
         uiLog('icon-tap');
         showComposer();
       }
@@ -391,7 +374,6 @@
     // v80：⑧长按菜单用户淘汰已整套删除（longPressMenu 键随之退役，旧存档多出的键无害）
     var ZSET = (window.__zcSettings = window.__zcSettings || {});
     var sendMinimize = (ZSET.sendMinimize !== false);      // ① 发送后归位（默认开）
-    var kbFollowExp = (ZSET.kbFollowExp === true);          // ③ 键盘跟随·实验（默认关）
     var amoledBlack = (ZSET.amoledBlack === true);          // ⑨ 纯黑 AMOLED（默认关）
     function applyAmoled(){
       try { doc.documentElement.classList.toggle('zc-amoled', amoledBlack); } catch (e) {}
@@ -1109,7 +1091,6 @@
       // v79⑥：流式增长跟踪（阅读位置线的"正在流式"判据）+ 阅读线保洁
       trackStreamGrow();
       if (readLineEl && (!streamingNow() || !readLineEl.isConnected)) { removeReadLine(true); }
-      applyKbLift();   // v79③：键盘实验模式——胶囊高度变化（多行）时重算抬升量
       // 按钮是胶囊的子节点，位置不随状态变化（只依赖半径），无需再定位
     }
     // 按钮中心对准胶囊右上角圆角圆心。按钮是胶囊的 absolute 子节点，所以只按半径算偏移，
@@ -1150,57 +1131,9 @@
       lastSafeB = b;
       try { doc.documentElement.style.setProperty('--zc-safe-b', b + 'px'); } catch (e) {}
     }
-    // ---------- v79③：键盘跟随·实验 ----------
-    // 原生 exp 模式不缩放 WebView（页面零重排），键盘起/落各报一次最终高度（__zcKb）。
-    // 这里换算"需要抬升的像素"：胶囊底缘越过键盘顶沿多少就抬多少，且不超过
-    // (胶囊顶缘-8px)——全屏态胶囊很高时只抬差值，不顶出屏。CSS 过渡（02_style
-    // zc-kb-on 规则）让抬升本身是动画；1s 轮询里补算（多行输入胶囊变高时重算）。
-    var kbH = 0, kbLift = 0;
-    var kbCalls = 0, kbLastAt = 0;   // v80③：桥接埋点——下次诊断分辨"原生没报"vs"报了没生效"
-    function calcKbLift(){
-      if (kbH <= 0 || !composerOpen) { return 0; }
-      var dk = getDock();
-      var pill = dk ? dk.querySelector('.rounded-2xl') : null;
-      if (!pill || !pill.offsetWidth) { return 0; }
-      var r = pill.getBoundingClientRect();
-      var overflow = r.bottom - (window.innerHeight - kbH);
-      if (overflow <= 0) { return 0; }
-      return Math.max(0, Math.min(overflow, r.top - 8));
-    }
-    function applyKbLift(){
-      var lift = calcKbLift();
-      if (lift === kbLift && (kbH > 0) === doc.documentElement.classList.contains('zc-kb-on')) { return; }
-      kbLift = lift;
-      try {
-        doc.documentElement.style.setProperty('--zc-kb-lift', lift + 'px');
-        doc.documentElement.classList.toggle('zc-kb-on', kbH > 0);
-      } catch (e) {}
-    }
-    function setKbH(h){
-      kbH = (typeof h === 'number' && h > 0 && h < window.innerHeight * 0.9) ? h : 0;
-      applyKbLift();
-    }
-    try {
-      window.__zcKb = function(h){
-        kbCalls++;
-        kbLastAt = Date.now();
-        setKbH(h);
-      };
-    } catch (eK0) {}
-    // v80③ 兜底：实验模式下若 WebView 未缩放但 Chromium 仍更新 visualViewport（部分
-    // 版本会），高度差直接当键盘高度用——原生桥（__zcKb）正常时两者一致，无害
-    try {
-      if (window.visualViewport && window.visualViewport.addEventListener) {
-        window.visualViewport.addEventListener('resize', function(){
-          if (!kbFollowExp || !composerOpen) { return; }
-          var implied = Math.round(window.innerHeight - window.visualViewport.height);
-          if (implied > 60 && Math.abs(implied - kbH) > 24) {
-            kbCalls += 100;   // 埋点标记：这条来自 vv 兜底（≥100 即 vv 生效过）
-            setKbH(implied);
-          }
-        });
-      }
-    } catch (eVV) {}
+    // ---------- v79③ 键盘跟随·实验已整套删除（v81，用户淘汰）----------
+    // WebView 恢复 v72 行为：原生把 IME inset 垫进 content，WebView 随键盘缩放，
+    // 页面自己坐到键盘上方——注入层不再接键盘高度、不再算抬升（__zcKb 桥退役）
     function pillChildrenFade(pill, op, dur, delay){
       var kids = pill.children;
       for (var i = 0; i < kids.length; i++) {
@@ -1313,16 +1246,6 @@
         pillChildrenFade(pill, '1', 0.12, 0);
       });
     }
-    // v79②：等 morph/closing 动画窗口过去再执行 fn（双击直进全屏要避开飞行窗口，
-    // 两段 morph 的 morphTok 会互相顶掉对方的替身清理，漏出隐藏中的真身）
-    function whenMorphDone(fn, tries){
-      var dk = getDock();
-      if (dk && (dk.classList.contains('zcode-composer-morph') || dk.classList.contains('zcode-composer-closing'))) {
-        if ((tries || 0) < 14) { setTimeout(function(){ whenMorphDone(fn, (tries || 0) + 1); }, 60); }
-        return;
-      }
-      fn();
-    }
     // ---------- 左下角收纳图标（v66 悬浮化）：有消息未唤出时的唯一底栏元素 ----------
     // 挂在 body 层 fixed 悬浮（不占流内空间，消息列表直接铺到屏幕底部）；
     // dock 收纳态高度为 0（见 fxStyle 零占位规则），页面让位计算随之归零。
@@ -1338,16 +1261,8 @@
       }
       if (composerOpen || dock.classList.contains('zcode-popup-mode') ||
           dock.classList.contains('zcode-popup-present')) {
-        // v79②：双击宽限——图标单击唤出后 520ms 内改"隐形但可接"（opacity:0 仍收触摸，
-        // display:none 会收不到第二击），morph 替身从图标位起飞的同时图标淡出，无双影；
-        // 宽限窗外维持原瞬时隐藏。窗口=双击判定 500ms + 20ms 余量
-        if (composerOpen && lastIconTapAt > 0 && Date.now() - lastIconTapAt < 520 && ic) {
-          ic.style.opacity = '0';
-          updateGestureExclude();
-          return;
-        }
         // 唤出态/弹窗态藏图标：与输入框的切换由容器变换负责，这里瞬时切换
-        if (ic) { ic.style.display = 'none'; ic.style.opacity = ''; }
+        if (ic) { ic.style.display = 'none'; }
         updateGestureExclude();
         return;
       }
@@ -1369,7 +1284,6 @@
         (isShadow ? root : doc.body || doc.documentElement).appendChild(ic);
       }
       ic.style.display = 'flex';
-      ic.style.opacity = '';   // v79②：清掉双击宽限期的隐形
       ic.style.transform = '';   // v69：清掉上次手势的跟手偏移，图标每次复出都从原位开始
       updateGestureExclude();
     }

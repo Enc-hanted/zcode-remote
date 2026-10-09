@@ -4,6 +4,16 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/)。
 
+## [未发布] — v81 工作区（bundleVer 58）
+
+v80 实机二验三条反馈的修复轮：两条居中根修 + 两个功能整套删除。
+
+- **⑦ ↓ 圆钮"不居中"根修——translate 属性与 transform 属性叠加**：Tailwind v4 的 `-translate-x-1/2` 编译成**独立 CSS `translate` 属性**（不是 transform），z.ai 的 ↓ 钮水平居中靠它；v80 的避让规则写的是 `transform: translate(-50%, …)`，两属性**叠加生效** → 二次左移半个钮宽（14px，实机截图偏左量与理论值精确吻合）。规则改为只写 Y 分量 `translateY(calc(-6px - var(--zc-safe-b)))`，水平完全不碰
+- **全屏（半屏）输入面板"不居中"中和**：注入层全屏几何本是对称（inset 0 + flex 居中 + 宽 min(94vw,640px)），偏移来自 z.ai 原生 dock 内层（`[data-v4-composer-dock-content]`）在全屏态残留的 padding/margin——float/full 两态一并归零并补 `width:100%`（对齐真页 w-full，dock 是 flex 缺了它内容层 shrink-to-fit 塌缩），全屏面板另加 `margin-inline:auto` 强制居中；dock 自身 `translate:none` 与 `transform:none` 并列（同源教训：位移工具类走 translate 属性，transform 归零拦不住）
+- **② 图标双击直进全屏：整套删除**（用户淘汰，"跟单击抢同一手势，真机做不稳"）：双击判定分支、`lastIconTapAt/XY`、`ensureIcon` 的 520ms 隐形宽限 hack、遮罩落点回退（05_nav）、`whenMorphDone` 帮手函数全链路移除；图标回归"唤出即隐"，双击第二击落遮罩=收起（点外部语义，不再误进全屏）
+- **③ 键盘跟随·实验：整套删除**（用户淘汰，"收益从未被实机证明，两轮翻车"）：JS 侧 `calcKbLift/applyKbLift/setKbH/__zcKb` 桥、visualViewport 兜底、`zc-kb-on` CSS 规则、`kbCalls/kbAgo` 埋点、设置开关（Kotlin `reportKb`/insets 分支/PageSettings/设置页/XML/strings）、mock f_kb 全链路移除；WebView 恢复 v72 行为（IME inset 垫 content，页面自己坐到键盘上方）。`kbFollowExp` 注入键退役（旧存档多出的键无害）；mock ↓ 钮居中改 `translate:-50%` 属性（Tailwind v4 真页同构）并新增带恶意不对称 padding 的 dock-content 包装层（验证中和规则）
+- mock 回归全绿：↓ 钮中心 341.3 vs 视口中心 341.5（safeB=26 时恰抬 32px、X 不动）、悬浮胶囊/全屏面板居中顶着恶意 padding 通过、双击不进全屏、发送归位①（contenteditable 路径）、AMOLED 热更、零 jsErrors
+
 ## [未发布] — v80 工作区（bundleVer 57）
 
 v79 实机首验四条反馈的修复轮。
