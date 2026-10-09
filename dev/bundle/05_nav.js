@@ -404,3 +404,91 @@
       hint('还没有可导航的消息，先去聊几句吧');
     }
 
+    // ---------- v79⑤：会话切换骨架屏 ----------
+    // 路由变化（history.pushState/replaceState + popstate，SPA 不触发导航事件）→ z.ai
+    // 整列表卸载重建（实机取证 ~1s 主线程冻结）。冻结期画面是上一会话残影/白屏，
+    // 这里铺一层与页面底色一致的骨架（几条微光条），首条 v4-row 渲染出来即淡出；
+    // 1.4s 硬上限防慢网下糊屏。只在主文档挂路由钩子（shadow root 共享同一 window.history，
+    // 重复包装会双触发）。uiLog/removeReadLine 等在 06 定义，函数声明提升后运行期可用。
+    var skEl = null, skObs = null, skTimer = 0, skShown = 0, skLastPath = '';
+    function skPageBg(){
+      try {
+        if (lastBot && typeof lastBot.r === 'number') { return 'rgb(' + lastBot.r + ',' + lastBot.g + ',' + lastBot.b + ')'; }
+      } catch (e) {}
+      return doc.documentElement.classList.contains('zcode-ui-light') ? '#FCFDFF' : '#0A0A0A';
+    }
+    function hideSkeleton(){
+      if (!skEl) { return; }
+      var el = skEl; skEl = null;
+      try { if (skObs) { skObs.disconnect(); } } catch (e0) {}
+      skObs = null;
+      if (skTimer) { clearTimeout(skTimer); skTimer = 0; }
+      if (ANIM_ON && !REDUCED) {
+        el.classList.add('zc-sk-out');
+        var done = function(){ if (el.parentNode) { el.parentNode.removeChild(el); } };
+        el.addEventListener('transitionend', done, {once: true});
+        setTimeout(done, 500);
+      } else {
+        try { el.parentNode.removeChild(el); } catch (e1) {}
+      }
+    }
+    function showSkeleton(){
+      if (!UI_ON || skEl) { return; }
+      skShown++;
+      uiLog('sk-show');
+      removeReadLine(true);   // 06 的阅读线锚在旧会话的行上，切会话直接收线
+      hideNav(); closePanel(); hideMsgSheet();   // 切会话时收起我们的浮层，骨架是唯一前景
+      skEl = doc.createElement('div');
+      skEl.id = 'zcode-skeleton';
+      skEl.style.background = skPageBg();
+      (isShadow ? root : doc.body || doc.documentElement).appendChild(skEl);
+      var W = Math.min(window.innerWidth, 760);
+      var offX = Math.max(10, Math.round((window.innerWidth - W) / 2));
+      var vh = window.innerHeight;
+      var bars = [ [0.07, 0.30], [0.13, 0.86], [0.22, 0.62], [0.32, 0.78], [0.42, 0.50], [0.55, 0.70] ];
+      for (var i = 0; i < bars.length; i++) {
+        var b = doc.createElement('div');
+        b.className = 'zc-sk-bar';
+        b.style.left = offX + 'px';
+        b.style.top = Math.round(vh * bars[i][0]) + 'px';
+        b.style.width = Math.round(W * bars[i][1]) + 'px';
+        if (REDUCED) { b.style.animation = 'none'; }
+        skEl.appendChild(b);
+      }
+      requestAnimationFrame(function(){
+        if (skEl) { skEl.classList.add('zc-sk-in'); }
+      });
+      try {
+        skObs = new MutationObserver(function(){
+          if (skEl && root.querySelector('[data-testid^="v4-row"]')) { hideSkeleton(); }
+        });
+        skObs.observe(root, {childList: true, subtree: true});
+      } catch (e2) {}
+      skTimer = setTimeout(hideSkeleton, 1400);
+    }
+    function onRouteChange(){
+      var p = '';
+      try { p = location.pathname || ''; } catch (e) { return; }
+      if (p === skLastPath) { return; }
+      var first = !skLastPath;
+      skLastPath = p;
+      if (first) { return; }   // 注入时的初始路径不算切换
+      showSkeleton();
+    }
+    if (!isShadow) {
+      try {
+        ['pushState', 'replaceState'].forEach(function(m){
+          var orig = history[m];
+          if (typeof orig !== 'function') { return; }
+          history[m] = function(){
+            var r;
+            try { r = orig.apply(this, arguments); } catch (e3) { throw e3; }
+            setTimeout(onRouteChange, 0);
+            return r;
+          };
+        });
+        evRoot.addEventListener('popstate', function(){ setTimeout(onRouteChange, 0); }, {passive: true});
+        onRouteChange();
+      } catch (eH) {}
+    }
+

@@ -117,6 +117,66 @@
                 <LinearLayout style="@style/SettingsRowText">
                     <TextView
                         style="@style/SettingsRowTitle"
+                        android:text="@string/settings_send_minimize" />
+                    <TextView
+                        style="@style/SettingsRowSubtitle"
+                        android:text="@string/settings_send_minimize_sub" />
+                </LinearLayout>
+                <com.google.android.material.materialswitch.MaterialSwitch
+                    android:id="@+id/switchSendMinimize"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/SettingsRow">
+                <LinearLayout style="@style/SettingsRowText">
+                    <TextView
+                        style="@style/SettingsRowTitle"
+                        android:text="@string/settings_long_press_menu" />
+                    <TextView
+                        style="@style/SettingsRowSubtitle"
+                        android:text="@string/settings_long_press_menu_sub" />
+                </LinearLayout>
+                <com.google.android.material.materialswitch.MaterialSwitch
+                    android:id="@+id/switchLongPressMenu"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/SettingsRow">
+                <LinearLayout style="@style/SettingsRowText">
+                    <TextView
+                        style="@style/SettingsRowTitle"
+                        android:text="@string/settings_kb_follow_exp" />
+                    <TextView
+                        style="@style/SettingsRowSubtitle"
+                        android:text="@string/settings_kb_follow_exp_sub" />
+                </LinearLayout>
+                <com.google.android.material.materialswitch.MaterialSwitch
+                    android:id="@+id/switchKbFollowExp"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/SettingsRow">
+                <LinearLayout style="@style/SettingsRowText">
+                    <TextView
+                        style="@style/SettingsRowTitle"
+                        android:text="@string/settings_amoled_black" />
+                    <TextView
+                        style="@style/SettingsRowSubtitle"
+                        android:text="@string/settings_amoled_black_sub" />
+                </LinearLayout>
+                <com.google.android.material.materialswitch.MaterialSwitch
+                    android:id="@+id/switchAmoledBlack"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/SettingsRow">
+                <LinearLayout style="@style/SettingsRowText">
+                    <TextView
+                        style="@style/SettingsRowTitle"
                         android:text="@string/settings_notify_reply" />
                     <TextView
                         style="@style/SettingsRowSubtitle"

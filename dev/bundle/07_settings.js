@@ -83,6 +83,14 @@
       }
       // 滑到底自动恢复输入框
       if (o.restoreOnBottom !== undefined) { restoreOnBottom = (o.restoreOnBottom !== false); }
+      // v79 新开关（同步进 window.__zcSettings，页面重载后的初始值也走它）
+      if (o.sendMinimize !== undefined) { sendMinimize = (o.sendMinimize !== false); ZSET.sendMinimize = sendMinimize; }
+      if (o.kbFollowExp !== undefined) { kbFollowExp = (o.kbFollowExp === true); ZSET.kbFollowExp = kbFollowExp; }
+      if (o.longPressMenu !== undefined) {
+        longPressMenu = (o.longPressMenu !== false); ZSET.longPressMenu = longPressMenu;
+        if (!longPressMenu) { hideMsgSheet(); }
+      }
+      if (o.amoledBlack !== undefined) { amoledBlack = (o.amoledBlack === true); ZSET.amoledBlack = amoledBlack; applyAmoled(); }
       // 滚动条热切（原生已注入原版，这里只在变化时加覆盖样式）
       if (o.scrollbar !== undefined) { setScrollbar(o.scrollbar); }
     }

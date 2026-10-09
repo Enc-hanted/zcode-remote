@@ -128,6 +128,11 @@
   <div class="t"><em>3</em>bundle 注入预览 OK</div>
 </nav>
 
+<!-- v79⑦ mock：z.ai 原生"回到底部"圆钮的替身（fixed 底部居中、28×28 贴底）——
+     配合"模拟safeB"按钮测 liftBottomFloats 几何抬升 -->
+<button id="mock-scrollbottom" aria-label="回到底部"
+  style="position:fixed;left:50%;transform:translateX(-50%);bottom:6px;width:28px;height:28px;border-radius:50%;background:#222;color:#CCC;border:1px solid rgba(255,255,255,0.12);z-index:50">↓</button>
+
 <!-- 控制条（v73：顶部+默认收起，点标题展开；不再挡住底部被测 UI） -->
 <div id="ctl" class="zc-fold">
   <h4 onclick="this.parentNode.classList.toggle('zc-fold')">预览控制 · bundle 已注入 <span id="st">…</span>（点击展开/收起）</h4>
@@ -140,6 +145,10 @@
   </div>
   <div class="grp">
     <button onclick="simNewReply()">模拟新回复</button>
+    <button onclick="simSend()">模拟发送(归位①)</button>
+    <button onclick="simRoute()">模拟会话切换(骨架⑤)</button>
+    <button onclick="simLongPress()">模拟长按消息(⑧)</button>
+    <button onclick="simSafeB()">模拟safeB(⑦抬升)</button>
     <button onclick="toggleRealNav()">移除/恢复真导航</button>
     <a href="settings_preview.html" target="_blank">设置页 mock →</a>
   </div>
@@ -149,6 +158,10 @@
     <label><input type="checkbox" id="f_nav" checked>导航</label>
     <label><input type="checkbox" id="f_reply" checked>回复通知</label>
     <label><input type="checkbox" id="f_scroll" checked>隐藏滚动条</label>
+    <label><input type="checkbox" id="f_send" checked>发送归位①</label>
+    <label><input type="checkbox" id="f_kb">键盘实验③</label>
+    <label><input type="checkbox" id="f_lp" checked>长按菜单⑧</label>
+    <label><input type="checkbox" id="f_amoled">AMOLED⑨</label>
     <button onclick="reloadWithFlags()">按勾选重新注入</button>
   </div>
   <div class="log" id="log"></div>
@@ -195,6 +208,13 @@ async function inject() {
     const fn = eval('(' + t + ')');
     const f = flags();
     const css = MOBILE_CSS + (document.getElementById('f_scroll').checked ? SCROLLBAR_HIDDEN : SCROLLBAR_SLIM);
+    // v79：会话页新开关（与 WebActivity.injectMobileFix 同形）
+    window.__zcSettings = {
+      sendMinimize: document.getElementById('f_send').checked,
+      kbFollowExp: document.getElementById('f_kb').checked,
+      longPressMenu: document.getElementById('f_lp').checked,
+      amoledBlack: document.getElementById('f_amoled').checked,
+    };
     fn(css, f.navOn, f.replyOn, f.floatInput, f.uiAnim);
     document.getElementById('st').textContent = 'OK (v' + (window.__zcodeErrors || []).length + ' 错误)';
     setTimeout(() => {
@@ -312,8 +332,53 @@ function log(msg) {
   const el = document.getElementById('log');
   el.textContent = new Date().toLocaleTimeString() + ' ' + msg + '\n' + el.textContent;
 }
+// ===== v79 特性钩子 =====
+// ① 模拟发送：输入框有字 → 清空 + 新用户行（sendObs 双证据应触发归位）
+async function simSend() {
+  const dk = document.querySelector('[data-v4-composer-dock="true"]');
+  const ta = dk && dk.querySelector('textarea');
+  if (!ta) return log('输入框不存在');
+  ta.value = '测试发送内容';
+  ta.dispatchEvent(new Event('input', {bubbles: true}));
+  await sleep(150);
+  ta.value = '';
+  ta.dispatchEvent(new Event('input', {bubbles: true}));
+  const app = document.getElementById('app');
+  const row = document.createElement('div');
+  row.className = 'row user group/user-row';
+  row.setAttribute('data-testid', 'v4-row-' + (2000 + Math.floor(Math.random() * 9000)));
+  row.innerHTML = '<section><div class="bubble">测试发送内容</div></section>';
+  app.appendChild(row);
+  log('simSend 派发（应触发发送后归位①）');
+}
+// ⑤ 模拟会话切换：pushState 换路径（mock 不重建行，骨架走 1.4s 兜底收场）
+function simRoute() {
+  history.pushState({}, '', '/remote/v4/session/mock-' + Date.now());
+  log('pushState 派发（应出骨架屏⑤）');
+}
+// ⑧ 模拟长按：touchstart 按住 620ms（>520ms 阈值）
+async function simLongPress() {
+  const row = document.querySelector('[data-testid^="v4-row"]');
+  if (!row) return log('没有消息行');
+  const r = row.getBoundingClientRect();
+  const x = r.left + 12, y = r.top + 12;
+  touch('touchstart', row, x, y);
+  await sleep(620);
+  touch('touchend', row, x, y);
+  log('长按已派发（应出动作条⑧）');
+}
+// ⑦ 模拟底部安全区：轮询 applySafeB 会消费它，liftBottomFloats 据 safeB+10 抬升 ↓ 钮
+function simSafeB() {
+  window.__zcodeSafeB = window.__zcodeSafeB ? 0 : 26;
+  log('__zcodeSafeB=' + window.__zcodeSafeB + '（应看到 ↓ 钮被抬高）');
+}
 function reloadWithFlags() {
-  localStorage.setItem('zcode_preview_flags', JSON.stringify(flags()));
+  localStorage.setItem('zcode_preview_flags', JSON.stringify(Object.assign(flags(), {
+    send: document.getElementById('f_send').checked,
+    kb: document.getElementById('f_kb').checked,
+    lp: document.getElementById('f_lp').checked,
+    amoled: document.getElementById('f_amoled').checked,
+  })));
   location.reload();
 }
 (function () {
@@ -323,6 +388,10 @@ function reloadWithFlags() {
     if (saved.replyOn !== undefined) document.getElementById('f_reply').checked = saved.replyOn;
     if (saved.floatInput !== undefined) document.getElementById('f_float').checked = saved.floatInput;
     if (saved.uiAnim !== undefined) document.getElementById('f_anim').checked = saved.uiAnim;
+    if (saved.send !== undefined) document.getElementById('f_send').checked = saved.send;
+    if (saved.kb !== undefined) document.getElementById('f_kb').checked = saved.kb;
+    if (saved.lp !== undefined) document.getElementById('f_lp').checked = saved.lp;
+    if (saved.amoled !== undefined) document.getElementById('f_amoled').checked = saved.amoled;
   } catch (e) {}
 })();
 </script>

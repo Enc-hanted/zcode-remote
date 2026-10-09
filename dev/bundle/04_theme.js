@@ -181,7 +181,7 @@
     function diagInfo(){
       var de = doc.documentElement;
       var out = {
-        bundleVer: 53,
+        bundleVer: 56,
         // v70：实机"动画不生效/交互生硬"排查项——系统减弱动效（REDUCED）会关掉全部注入
         // 动画；safeB 是原生边到边上报的底部安全区（0 = 旧壳/桌面/未上报）
         animOn: ANIM_ON,
@@ -347,6 +347,17 @@
         out.composerProbe = liveDock ? ('hit cls=' + (liveDock.className || '').slice(0, 60) +
           ' hasExpand=' + (liveDock.querySelector('#zcode-composer-expand') ? 1 : 0)) : 'miss';
       } catch (e) { out.composerProbe = 'err'; }
+      // v79：新交互特性状态（①发送归位 ③键盘实验 ⑤骨架 ⑥阅读线 ⑦抬升 ⑧长按 ⑨AMOLED）
+      try {
+        out.feats = {
+          sendMin: sendMinimize ? 1 : 0, kbExp: kbFollowExp ? 1 : 0,
+          kbH: kbH || 0, kbLift: kbLift || 0,
+          lpMenu: longPressMenu ? 1 : 0, amoled: amoledBlack ? 1 : 0,
+          skShown: (typeof skShown === 'number' ? skShown : 0),
+          readLine: readLineEl ? 1 : 0,
+          liftLog: (liftLog || []).slice(-3)
+        };
+      } catch (eFT) { out.feats = 'err'; }
       out.bars = 'top=' + (lastTop ? lastTop.r + ',' + lastTop.g + ',' + lastTop.b : 'null') +
         ' bot=' + (lastBot ? lastBot.r + ',' + lastBot.g + ',' + lastBot.b : 'null');
       // 弹窗复活诊断（v54）：dock 内所有疑似弹窗节点的位置链——含 findPopup 跳过的 pill 内部节点，

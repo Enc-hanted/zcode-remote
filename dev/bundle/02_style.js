@@ -90,6 +90,63 @@
         'html.zcode-float-on [data-testid="v4-timeline"] [style*="mask-position"],' +
         'html.zcode-float-on [data-testid="v4-timeline-scroll"] [style*="mask-position"]' +
         '{-webkit-mask-image:none!important;mask-image:none!important}' +
+        // v78 让位垫过渡：胶囊唤出/收纳时 tl 的 padding-bottom 变化不再是瞬时跳变，
+        // 而是短滑过渡——垫的写入时机已挪到 morph 落位之后（06_composer），配合这条
+        // 过渡整个"消息列表为胶囊让位"的动作是连续的。仅收纳态生效，不干扰 z.ai
+        // 原生模式的任何 padding 行为；过渡期间 scrollHeight 逐帧变化由 v75 静止闸门兜住。
+        'html.zcode-float-on [data-testid="v4-timeline"],' +
+        'html.zcode-float-on [data-testid="v4-timeline-scroll"]' +
+        '{transition:padding-bottom 0.22s cubic-bezier(0.2,0.8,0.2,1)}' +
+        // v78 上拉手柄：胶囊上内缘（右上角）低可视小横条——提示"可上拉展开半屏输入"。
+        // 挂 dock（fixed=定位锚）的 ::after 伪元素：样式表注入，React 重渲染抹不掉；
+        // 不碰 z.ai 的胶囊本体（不改它的 position，零回归面）。点按无感（pointer-events
+        // none），拖动展开的手势本来就由胶囊整体的纵向 dockGesture 承担。
+        'html.zcode-float-on [data-v4-composer-dock="true"].zcode-composer-float::after{content:"";' +
+        'position:absolute;top:3px;right:10px;width:26px;height:3px;border-radius:2px;' +
+        'background:var(--zc-text-3);opacity:0.18;pointer-events:none}' +
+        'html.zcode-float-on [data-v4-composer-dock="true"].zcode-composer-float:active::after{opacity:0.4}' +
+        // v78 morph 幽灵替身基样式（动画值由 JS 内联写入）：真实胶囊飞行期间隐藏，
+        // 替身用尺寸动画飞行——scale 非均匀缩放会把圆角与描边压成椭圆（"中途丑陋
+        // 椭圆帧"的来源），尺寸动画几何全程正确
+        '.zcode-morph-ghost{position:fixed;z-index:99999;pointer-events:none;box-sizing:border-box}' +
+        // v79⑤ 会话切换骨架屏：路由切换 → 整列表卸载重建（实机 ~1s 主线程冻结），冻结期
+        // 铺一层与页面底色一致的微光条，首条 v4-row 渲染即淡出（05_nav route watch 驱动）。
+        // 淡入 140ms：快速切换时骨架几乎不可见；pointer-events:none 不挡任何点击
+        '#zcode-skeleton{position:fixed;inset:0;z-index:99990;pointer-events:none;opacity:0;transition:opacity 0.14s ease-out}' +
+        '#zcode-skeleton.zc-sk-in{opacity:1}' +
+        '#zcode-skeleton.zc-sk-out{opacity:0;transition:opacity 0.18s ease-in}' +
+        '.zc-sk-bar{position:absolute;height:13px;border-radius:7px;' +
+        'background:linear-gradient(90deg,rgba(255,255,255,0.04),rgba(255,255,255,0.10),rgba(255,255,255,0.04));' +
+        'background-size:200% 100%;animation:zcodeSkShimmer 1.3s linear infinite}' +
+        'html.zcode-ui-light .zc-sk-bar{background:linear-gradient(90deg,rgba(10,18,34,0.05),rgba(10,18,34,0.12),rgba(10,18,34,0.05));background-size:200% 100%}' +
+        '@keyframes zcodeSkShimmer{from{background-position:200% 0}to{background-position:-200% 0}}' +
+        // v79⑥ 流式阅读位置线：流式中上滑离开底部，在离开时刻的内容底边插一条低可视
+        // 细线（"新内容都在线下方"），滚回底部/流式结束淡出。挂在内容流里（行后插节点），
+        // 内容只在尾部追加，锚点稳定；行被虚拟化卸载则顺手收线
+        '.zc-readline{position:relative;height:2px;margin:10px 2px;border-radius:1px;' +
+        'background:linear-gradient(90deg,transparent,var(--zc-stroke-strong) 12%,var(--zc-stroke-strong) 88%,transparent);' +
+        'opacity:0.7;pointer-events:none;transition:opacity 0.4s ease}' +
+        '.zc-readline.zc-rl-out{opacity:0}' +
+        '.zc-readline i{position:absolute;right:2px;top:-15px;font-style:normal;font-size:10px;' +
+        'color:var(--zc-text-3);opacity:0.75;letter-spacing:1px}' +
+        // v79⑨ AMOLED 纯黑（实验开关）：注入层 token 换纯黑系；页面侧 best-effort
+        //（body/timeline 底面），z.ai 气泡/代码块等具体表面色需实机调色（HANDOFF 待办）
+        'html.zc-amoled{--zc-bg:rgba(0,0,0,0.86);--zc-bg-strong:rgba(0,0,0,0.92);--zc-bg-deep:rgba(0,0,0,0.96);' +
+        '--zc-hint-bg:rgba(0,0,0,0.95);--zc-stroke:rgba(255,255,255,0.10);--zc-stroke-faint:rgba(255,255,255,0.05);' +
+        '--zc-stroke-strong:rgba(255,255,255,0.16)}' +
+        'html.zc-amoled body,html.zc-amoled [data-testid="v4-timeline"],html.zc-amoled [data-testid="v4-timeline-scroll"]' +
+        '{background-color:#000!important}' +
+        // v79③ 键盘跟随·实验：WebView 不随 IME 缩放（原生 exp 模式不垫 ime padding，页面
+        // 零重排、虚拟列表不再逐帧重算），键盘起/落各报一次最终高度（__zcKb），JS 换算
+        // --zc-kb-lift，胶囊/全屏用 CSS 过渡贴着键盘顶沿升降。掉帧根修的实验路径。
+        // 特定性注意：选择器必须比上面的 float/full 基础规则多一级（html.zcode-float-on
+        // 前缀），否则同为 (0,3,2) 时基础规则的 transform 会盖掉这里的 translateY
+        'html.zcode-float-on.zc-kb-on [data-v4-composer-dock="true"].zcode-composer-float{' +
+        'transform:translateX(-50%) translateY(calc(0px - var(--zc-kb-lift, 0px)))!important;' +
+        'transition:transform 0.26s cubic-bezier(0.2,0.8,0.2,1)!important}' +
+        'html.zcode-float-on.zc-kb-on [data-v4-composer-dock="true"].zcode-composer-full{' +
+        'transform:translateY(calc(0px - var(--zc-kb-lift, 0px)))!important;' +
+        'transition:transform 0.26s cubic-bezier(0.2,0.8,0.2,1)!important}' +
         // 弹窗模式：dock 临时显示为底部容器（不遮挡全屏），输入部分隐藏，弹窗可见可点
         // 容器变换进行中：压掉 float/full 态的入场 animation，几何交给 JS 的 transform 过渡
         '[data-v4-composer-dock="true"].zcode-composer-morph{animation:none!important}' +

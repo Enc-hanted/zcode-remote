@@ -9,6 +9,10 @@ data class PageSettings(
     val notifyReply: Boolean,
     val floatingInput: Boolean,
     val restoreOnBottom: Boolean,
+    val sendMinimize: Boolean,
+    val kbFollowExp: Boolean,
+    val longPressMenu: Boolean,
+    val amoledBlack: Boolean,
 )
 
 /** 基础设置：会话页外观与后台保活策略。 */
@@ -71,6 +75,27 @@ class SettingsStore(context: Context) {
         get() = prefs.getBoolean(KEY_RESTORE_ON_BOTTOM, true)
         set(v) = prefs.edit().putBoolean(KEY_RESTORE_ON_BOTTOM, v).apply()
 
+    /** v79①：发送后归位——发送消息后输入框自动收纳，回复全屏阅读；点图标再唤出 */
+    var sendMinimize: Boolean
+        get() = prefs.getBoolean(KEY_SEND_MINIMIZE, true)
+        set(v) = prefs.edit().putBoolean(KEY_SEND_MINIMIZE, v).apply()
+
+    /** v79③：键盘跟随·实验——WebView 不随键盘缩放（页面零重排），胶囊由 JS 贴键盘顶沿升降。
+     *  默认关：需实机验证后再常开（失败形态=胶囊被键盘盖住，切回即恢复） */
+    var kbFollowExp: Boolean
+        get() = prefs.getBoolean(KEY_KB_FOLLOW_EXP, false)
+        set(v) = prefs.edit().putBoolean(KEY_KB_FOLLOW_EXP, v).apply()
+
+    /** v79⑧：长按消息快捷菜单（复制全文/引用）；长按文本本身仍是原生长按选择 */
+    var longPressMenu: Boolean
+        get() = prefs.getBoolean(KEY_LONG_PRESS_MENU, true)
+        set(v) = prefs.edit().putBoolean(KEY_LONG_PRESS_MENU, v).apply()
+
+    /** v79⑨：纯黑 AMOLED（实验）——注入层换纯黑 token + 页面底面 best-effort 纯黑 */
+    var amoledBlack: Boolean
+        get() = prefs.getBoolean(KEY_AMOLED_BLACK, false)
+        set(v) = prefs.edit().putBoolean(KEY_AMOLED_BLACK, v).apply()
+
     /** 浮动 logo 是否被拖过位置（v65 起 logo 已移除，字段保留兼容旧存档与桥接口） */
     var logoPosSet: Boolean
         get() = prefs.getBoolean(KEY_LOGO_POS_SET, false)
@@ -85,13 +110,17 @@ class SettingsStore(context: Context) {
         get() = prefs.getFloat(KEY_LOGO_Y, 0.02f)
         set(v) = prefs.edit().putFloat(KEY_LOGO_Y, v).apply()
 
-    /** 会话页四开关快照：设置页返回后与上次注入值对比，有变化就热更新页面（动效已固定开启，不含） */
+    /** 会话页开关快照：设置页返回后与上次注入值对比，有变化就热更新页面（动效已固定开启，不含） */
     fun pageSnapshot() = PageSettings(
         hideScrollbar = hideScrollbar,
         turnNavigator = turnNavigator,
         notifyReply = notifyReply,
         floatingInput = floatingInput,
         restoreOnBottom = restoreOnBottom,
+        sendMinimize = sendMinimize,
+        kbFollowExp = kbFollowExp,
+        longPressMenu = longPressMenu,
+        amoledBlack = amoledBlack,
     )
 
     companion object {
@@ -104,6 +133,10 @@ class SettingsStore(context: Context) {
         private const val KEY_NOTIF_PERMISSION_ASKED = "notif_permission_asked"
         private const val KEY_FLOATING_INPUT = "floating_input"
         private const val KEY_RESTORE_ON_BOTTOM = "restore_on_bottom"
+        private const val KEY_SEND_MINIMIZE = "send_minimize"
+        private const val KEY_KB_FOLLOW_EXP = "kb_follow_exp"
+        private const val KEY_LONG_PRESS_MENU = "long_press_menu"
+        private const val KEY_AMOLED_BLACK = "amoled_black"
         private const val KEY_LOGO_POS_SET = "logo_pos_set"
         private const val KEY_LOGO_X = "logo_x"
         private const val KEY_LOGO_Y = "logo_y"

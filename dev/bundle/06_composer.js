@@ -46,6 +46,7 @@
     // 触摸走 touch 系；桌面 Chrome 直接用鼠标时没有 touch 事件，pointer 系(mouse/pen)兜底。
     // pointer 处理器对 pointerType==='touch' 一律放行，避免移动端 touch+pointer 双触发。
     var iconTrack = null;
+    var lastIconTapAt = 0;   // v79②：最近一次图标单击时刻（双击直进全屏的判据）
     function evXY(e){
       if (e.touches) { return e.touches[0]; }
       return e;
@@ -107,6 +108,20 @@
       // touchend 用 changedTouches（手指离开位置），pointerup 用事件自身坐标
       var t = e.changedTouches ? e.changedTouches[0] : e;
       if (Date.now() - tr.t0 < 350 && Math.abs(t.clientX - tr.x) < 10 && Math.abs(t.clientY - tr.y) < 10) {
+        var now = Date.now();
+        if (now - lastIconTapAt < 330) {
+          // v79②：双击直进全屏。首击已唤出浮动胶囊（图标在宽限窗内隐形但可接——见
+          // ensureIcon），第二击落点仍是图标：等 morph 飞行结束再切全屏，避免两段
+          // 变换的 morphTok 互相打架（替身清理被顶掉会漏出隐藏的真身）
+          uiLog('icon-dbltap-full');
+          vibrate();
+          lastIconTapAt = 0;
+          whenMorphDone(function(){
+            if (composerOpen && !composerFull) { toggleFullComposer(); }
+          });
+          return;
+        }
+        lastIconTapAt = now;
         uiLog('icon-tap');
         showComposer();
       }
@@ -212,11 +227,154 @@
         showComposer(false);
       }
     }
+    // ---------- v79①：发送后归位 ----------
+    // 触发签名（双证据）：composer 开着 + 输入框刚有字 → 新的用户行出现 且 输入框已清空。
+    // "手动删光字"不会有新用户行，不误触。z.ai 发送即清输入框（React 受控清空会先于
+    // 行挂载发生），所以"清空"只作证据不作触发——触发点始终是新用户行的出现。
+    // 归位延迟 420ms：让 z.ai 自己的发送动画先走一步，morph 收纳接在其后，两段不叠帧。
+    var sendHadText = false, sendHadTextAt = 0;
+    function onComposerInput(e){
+      var t = e.target;
+      if (!t || !t.tagName) { return; }
+      if (t.tagName !== 'TEXTAREA' && t.tagName !== 'INPUT') { return; }
+      if (!t.closest || !t.closest('[data-v4-composer-dock="true"]')) { return; }
+      if (t.value && t.value.trim()) { sendHadText = true; sendHadTextAt = Date.now(); }
+      else if (Date.now() - sendHadTextAt > 600) { sendHadText = false; }   // 发送瞬间的清空（600ms 内）不灭旗
+    }
+    var sendObs = null;
+    try {
+      sendObs = new MutationObserver(function(muts){
+        if (!sendMinimize || !composerOpen || !sendHadText) { return; }
+        if (Date.now() - sendHadTextAt > 6000) { sendHadText = false; return; }
+        for (var i = 0; i < muts.length; i++) {
+          if (muts[i].type !== 'childList') { continue; }
+          var ns = muts[i].addedNodes;
+          for (var j = 0; j < ns.length; j++) {
+            var n = ns[j];
+            if (n.nodeType !== 1) { continue; }
+            var row = null;
+            var tid = n.getAttribute ? (n.getAttribute('data-testid') || '') : '';
+            if (tid.indexOf('v4-row') === 0) { row = n; }
+            else if (n.querySelector) { row = n.querySelector('[data-testid^="v4-row"]'); }
+            if (!row) { continue; }
+            var cls = ' ' + (row.className || '') + ' ';
+            if (cls.indexOf('group/user-row') < 0) { continue; }
+            var dk = getDock();
+            var ta = dk ? dk.querySelector('[data-testid^="v4-composer-input"], textarea') : null;
+            if (ta && ta.value && ta.value.trim()) { continue; }   // 有字=不是发送
+            sendHadText = false;
+            uiLog('send-minimize');
+            setTimeout(function(){
+              try {
+                var ae = doc.activeElement;
+                if (ae && ae.blur) { ae.blur(); }   // 先收键盘：IME 逐帧 resize 与 morph 重叠是旧痛点
+              } catch (e1) {}
+              if (composerOpen) { hideComposer(); }
+            }, 420);
+            return;
+          }
+        }
+      });
+      sendObs.observe(root, {childList: true, subtree: true});
+    } catch (eSO) {}
+
+    // ---------- v79⑥：流式阅读位置线 ----------
+    // 流式输出中用户上滑离开底部 → 在"离开那一刻的内容底边"插一条低可视细线，新内容
+    // 继续在线下方生长；滚回底部或流式结束即淡出。锚在最后一个可见行后面（内容只在
+    // 尾部追加，锚点位置稳定）；锚行被虚拟化卸载则顺手收线，不重建。
+    var readLineEl = null, lastShSeen = -1, lastShGrowAt = 0;
+    function trackStreamGrow(){
+      var tl = overlayTl();
+      if (!tl) { return; }
+      var sh = tl.scrollHeight;
+      if (lastShSeen < 0 || sh > lastShSeen + 2) { lastShGrowAt = Date.now(); }
+      lastShSeen = sh;
+    }
+    function streamingNow(){ return (Date.now() - lastShGrowAt) < 2200; }
+    function removeReadLine(now){
+      if (!readLineEl) { return; }
+      var el = readLineEl; readLineEl = null;
+      if (ANIM_ON && !REDUCED && !now) {
+        el.classList.add('zc-rl-out');
+        setTimeout(function(){ if (el.parentNode) { el.parentNode.removeChild(el); } }, 450);
+      } else {
+        try { el.parentNode.removeChild(el); } catch (e0) {}
+      }
+    }
+    function placeReadLine(tl){
+      var vb = window.innerHeight;
+      var rows = tl.querySelectorAll('[data-testid^="v4-row"]');
+      var anchor = null;
+      for (var i = rows.length - 1; i >= 0; i--) {
+        var rb = rows[i].getBoundingClientRect().bottom;
+        if (rb <= vb - 4 && rb > 0) { anchor = rows[i]; break; }
+      }
+      if (!anchor || !anchor.parentNode) { return; }
+      var el = doc.createElement('div');
+      el.className = 'zc-readline';
+      var lab = doc.createElement('i');
+      lab.textContent = '新内容 ↓';
+      el.appendChild(lab);
+      anchor.parentNode.insertBefore(el, anchor.nextSibling);
+      readLineEl = el;
+      uiLog('readline-place');
+    }
+    function onReadScroll(){
+      var tl = overlayTl();
+      if (!tl) { return; }
+      if (readLineEl) {
+        var dist = tl.scrollHeight - tl.clientHeight - tl.scrollTop;
+        if (dist <= 160 || !streamingNow() || !readLineEl.isConnected) { removeReadLine(); }
+        return;
+      }
+      if (!streamingNow()) { return; }
+      var dist2 = tl.scrollHeight - tl.clientHeight - tl.scrollTop;
+      if (dist2 > 260) { placeReadLine(tl); }
+    }
+
+    // ---------- v79⑦：底部悬浮控件统一抬升（z.ai 原生 ↓ 回底圆钮避让小白条） ----------
+    // 未连 USB 无法现场锚定选择器，走几何解析：收纳态里"悬在视口底部 170px 内的
+    // fixed/absolute 小圆钮（18-46px 近方形）"逐个测底缘与 安全区+10px 的差值，差多少
+    // translateY 补多少（transform 不挑定位方案，不猜 bottom/top）。幂等：rect 反映已
+    // 应用的位移，补满后 deficit≤0 不再写。行内静态定位的操作按钮（复制/点赞）被
+    // position 过滤器排除，不会被挪。命中即记 liftLog（诊断卡可查 → 下次连 USB 钉死
+    // 选择器后可换成静态 CSS）。
+    var liftLog = [];
+    function liftBottomFloats(){
+      if (composerOpen || !doc.documentElement.classList.contains('zcode-float-on')) { return; }
+      var need = safeB() + 10;
+      if (need <= 10) { return; }   // 桌面/旧壳：没有小白条要避让
+      var vh = window.innerHeight, vw = window.innerWidth;
+      var cands = root.querySelectorAll('button, [role="button"]');
+      for (var i = 0; i < cands.length && i < 80; i++) {
+        var el = cands[i];
+        if (el.id && el.id.indexOf('zcode-') === 0) { continue; }
+        if (el.closest && el.closest('[data-v4-composer-dock="true"], ' + NAV_SEL + ', #zcode-mask, #zcode-skeleton, #zcode-msg-sheet, #zcode-msg-sheet-catcher')) { continue; }
+        var w = el.offsetWidth, h = el.offsetHeight;
+        if (w < 18 || w > 46 || h < 18 || h > 46 || Math.abs(w - h) > 10) { continue; }
+        var pos = '';
+        try { pos = getComputedStyle(el).position; } catch (eP) {}
+        if (pos !== 'fixed' && pos !== 'absolute') { continue; }
+        var r = el.getBoundingClientRect();
+        if (r.bottom <= vh - 170 || r.bottom > vh + 4 || r.left < 0 || r.right > vw) { continue; }
+        var deficit = need - (vh - r.bottom);
+        if (deficit <= 0.5) { continue; }
+        if (el.__zcLiftT === undefined) {
+          el.__zcLiftT = el.style.transform || '';
+          liftLog.push((el.tagName + '[' + (el.getAttribute('data-testid') || '') + ']' +
+            Math.round(w) + 'x' + Math.round(h) + '@' + Math.round(r.left) + ',' + Math.round(r.top) +
+            ' +' + Math.round(deficit)).slice(0, 60));
+          if (liftLog.length > 6) { liftLog.shift(); }
+          uiLog('float-lift');
+        }
+        el.style.transform = (el.__zcLiftT ? el.__zcLiftT + ' ' : '') + 'translateY(' + (-Math.ceil(deficit)) + 'px)';
+      }
+    }
+
     function dockGesturePtrDown(e){
       if (e.pointerType === 'touch') { return; }
       dockTrack = dockGestureArm(e.target, e.clientX, e.clientY);
-    }
-    function dockGesturePtrMove(e){
+    }    function dockGesturePtrMove(e){
       if (e.pointerType === 'touch') { return; }
       dockGestureMove(e);
     }
@@ -235,6 +393,8 @@
       evRoot.addEventListener('pointerup', dockGesturePtrUp, {passive:true});
       // scroll 不冒泡但参与捕获：capture 挂根上可以收到内部滚动容器的滚动
       evRoot.addEventListener('scroll', watchScrollRestore, {passive:true, capture:true});
+      evRoot.addEventListener('scroll', onReadScroll, {passive:true, capture:true});   // v79⑥：阅读位置线
+      evRoot.addEventListener('input', onComposerInput, {passive:true, capture:true});   // v79①：发送检测的输入跟踪
       window.addEventListener('resize', updateGestureExclude);
       syncComposer();
     }
@@ -247,6 +407,16 @@
     var composerOpen = false, composerFull = false, pendingOpen = false;   // pendingOpen: dock 未就绪时的待开标记
     var lastDockH = -1;   // v66：dock 流内高度跟踪（收纳 0 / 唤出悬浮 / 常驻 121），变化时通知列表重算
     var restoreOnBottom = true;   // v67 设置项"滑到底部恢复输入框"（原生 applySettings 热更）
+    // v79 会话页新开关（原生层注入 window.__zcSettings，applySettings 热更；mock 预览页同形）
+    var ZSET = (window.__zcSettings = window.__zcSettings || {});
+    var sendMinimize = (ZSET.sendMinimize !== false);      // ① 发送后归位（默认开）
+    var kbFollowExp = (ZSET.kbFollowExp === true);          // ③ 键盘跟随·实验（默认关）
+    var longPressMenu = (ZSET.longPressMenu !== false);     // ⑧ 长按消息菜单（默认开）
+    var amoledBlack = (ZSET.amoledBlack === true);          // ⑨ 纯黑 AMOLED（默认关）
+    function applyAmoled(){
+      try { doc.documentElement.classList.toggle('zc-amoled', amoledBlack); } catch (e) {}
+    }
+    applyAmoled();
     // v71：虚拟列表换窗时可能短暂卸载全部 v4-row；不能把一次空 query 当成"新空会话"。
     // 首次见到消息后，连续两轮（约 2 秒）都无行才允许摘 zcode-float-on，避免 dock
     // 在 0 高/原生高度之间来回跳，进而触发 resize→虚拟列表重算→再次卸载的反馈回路。
@@ -547,6 +717,10 @@
       return 0;
     }
     function setOverlayPad(want){
+      // v78：morph 飞行中不落垫（真身隐藏中，垫的变化会穿帮）——落位回调的
+      // syncComposer 会补上；1s 轮询在飞行窗口撞进来也由此挡住
+      var dk = getDock();
+      if (dk && dk.classList.contains('zcode-composer-morph')) { return; }
       var t = overlayTl();
       if (!t || want <= 0) { return; }
       var vs = want + 'px';
@@ -952,6 +1126,11 @@
       }
       // v68b：收纳态视口底部空洞检测+抖动修补（上滚/翻转后虚拟列表没跟上时）
       fixViewportHole();
+      // v79⑥：流式增长跟踪（阅读位置线的"正在流式"判据）+ 阅读线保洁
+      trackStreamGrow();
+      if (readLineEl && (!streamingNow() || !readLineEl.isConnected)) { removeReadLine(true); }
+      applyKbLift();   // v79③：键盘实验模式——胶囊高度变化（多行）时重算抬升量
+      liftBottomFloats();   // v79⑦：z.ai 原生 ↓ 圆钮等底部悬浮件避让小白条
       // 按钮是胶囊的子节点，位置不随状态变化（只依赖半径），无需再定位
     }
     // 按钮中心对准胶囊右上角圆角圆心。按钮是胶囊的 absolute 子节点，所以只按半径算偏移，
@@ -992,6 +1171,37 @@
       lastSafeB = b;
       try { doc.documentElement.style.setProperty('--zc-safe-b', b + 'px'); } catch (e) {}
     }
+    // ---------- v79③：键盘跟随·实验 ----------
+    // 原生 exp 模式不缩放 WebView（页面零重排），键盘起/落各报一次最终高度（__zcKb）。
+    // 这里换算"需要抬升的像素"：胶囊底缘越过键盘顶沿多少就抬多少，且不超过
+    // (胶囊顶缘-8px)——全屏态胶囊很高时只抬差值，不顶出屏。CSS 过渡（02_style
+    // zc-kb-on 规则）让抬升本身是动画；1s 轮询里补算（多行输入胶囊变高时重算）。
+    var kbH = 0, kbLift = 0;
+    function calcKbLift(){
+      if (kbH <= 0 || !composerOpen) { return 0; }
+      var dk = getDock();
+      var pill = dk ? dk.querySelector('.rounded-2xl') : null;
+      if (!pill || !pill.offsetWidth) { return 0; }
+      var r = pill.getBoundingClientRect();
+      var overflow = r.bottom - (window.innerHeight - kbH);
+      if (overflow <= 0) { return 0; }
+      return Math.max(0, Math.min(overflow, r.top - 8));
+    }
+    function applyKbLift(){
+      var lift = calcKbLift();
+      if (lift === kbLift && (kbH > 0) === doc.documentElement.classList.contains('zc-kb-on')) { return; }
+      kbLift = lift;
+      try {
+        doc.documentElement.style.setProperty('--zc-kb-lift', lift + 'px');
+        doc.documentElement.classList.toggle('zc-kb-on', kbH > 0);
+      } catch (e) {}
+    }
+    try {
+      window.__zcKb = function(h){
+        kbH = (typeof h === 'number' && h > 0 && h < window.innerHeight * 0.9) ? h : 0;
+        applyKbLift();
+      };
+    } catch (eK0) {}
     function pillChildrenFade(pill, op, dur, delay){
       var kids = pill.children;
       for (var i = 0; i < kids.length; i++) {
@@ -1006,48 +1216,76 @@
       pill.style.transition = '';
       pill.style.transform = '';
       pill.style.borderRadius = '';
+      pill.style.visibility = '';
       pillChildrenFade(pill, '', 0, 0);
     }
     function morphable(pill, dock){
       return ANIM_ON && !REDUCED && !!pill && !!dock &&
         !dock.classList.contains('zcode-popup-mode') && !dock.classList.contains('zcode-popup-present');
     }
-    // 唤出：真身先就位（float 态），把起点缩放在图标处，松手长大
-    function morphReveal(dock, pill, from){
+    // v78 morph 幽灵替身：真实胶囊 visibility:hidden，替身（复刻胶囊的背景/描边/阴影/
+    // 圆角）用 left/top/width/height 尺寸动画飞行。旧方案 transform:scale 非均匀缩放
+    // （sx≠sy）会把圆角与描边粗细压扁拉长——飞行中途那帧"丑陋椭圆"就是它；尺寸动画
+    // 的几何全程正确。落位（dur+40ms）换回真身并回调 settle；morphTok 防飞行中再触发
+    // 的旧回调提交状态（新飞行接管一切）。
+    function morphGhost(pill, from, to, dur, radiusEnd, settle){
+      var cs;
+      try { cs = getComputedStyle(pill); } catch (e0) { cs = null; }
+      var g = doc.createElement('div');
+      g.className = 'zcode-morph-ghost';
+      g.style.left = from.x + 'px';
+      g.style.top = from.y + 'px';
+      g.style.width = Math.max(1, from.w) + 'px';
+      g.style.height = Math.max(1, from.h) + 'px';
+      if (cs) {
+        g.style.background = cs.backgroundColor;
+        g.style.border = cs.borderTopWidth + ' ' + cs.borderTopStyle + ' ' + cs.borderTopColor;
+        g.style.boxShadow = cs.boxShadow;
+      }
+      g.style.borderRadius = (Math.abs(from.w - from.h) < 2 ? '50%' : (radiusEnd || '22px'));
+      (doc.body || doc.documentElement).appendChild(g);
+      pill.style.visibility = 'hidden';
+      void g.offsetWidth;   // 起点帧先生效，否则 transition 不触发
+      var ease = ' cubic-bezier(0.2,0.8,0.2,1)';
+      g.style.transition = 'left ' + dur + 'ms' + ease + ',top ' + dur + 'ms' + ease +
+        ',width ' + dur + 'ms' + ease + ',height ' + dur + 'ms' + ease +
+        ',border-radius ' + dur + 'ms ease';
+      g.style.left = to.x + 'px';
+      g.style.top = to.y + 'px';
+      g.style.width = Math.max(1, to.w) + 'px';
+      g.style.height = Math.max(1, to.h) + 'px';
+      g.style.borderRadius = radiusEnd || '22px';
+      var tok = ++morphTok;
+      setTimeout(function(){
+        try { g.parentNode.removeChild(g); } catch (e1) {}
+        if (tok !== morphTok) { return; }   // 已被新飞行接管，真身可见性归新飞行管
+        try { pill.style.visibility = ''; } catch (e2) {}
+        settle();
+      }, dur + 40);
+    }
+    // 唤出：真身先就位（float 态）但隐藏，替身从图标位置长大到胶囊落位；
+    // 落位后才落垫+状态同步（settle 回调），垫的 padding 过渡见 02_style
+    function morphReveal(dock, pill, from, after){
       var to = rectOf(pill);
       if (!(to.w > 0)) { return; }
       dock.classList.add('zcode-composer-morph');
-      pill.style.transformOrigin = (from.x + from.w / 2 - to.x) + 'px ' + (from.y + from.h / 2 - to.y) + 'px';
-      pill.style.transform = 'scale(' + (from.w / Math.max(1, to.w)) + ',' + (from.h / Math.max(1, to.h)) + ')';
-      pill.style.borderRadius = '50%';
-      pillChildrenFade(pill, '0', 0, 0);
-      void pill.offsetWidth;   // 先让起点帧生效，否则 transition 不触发
-      pill.style.transition = 'transform 0.28s cubic-bezier(0.2,0.8,0.2,1), border-radius 0.28s cubic-bezier(0.2,0.8,0.2,1)';
-      pill.style.transform = '';
-      pill.style.borderRadius = '';
-      pillChildrenFade(pill, '1', 0.26, 0.06);
-      var tok = ++morphTok;
-      setTimeout(function(){
-        if (tok !== morphTok) { return; }
+      pillChildrenFade(pill, '0', 0, 0);   // 内容随落位淡入，避免换回真身时瞬现
+      var rad = '';
+      try { rad = getComputedStyle(pill).borderRadius || ''; } catch (e0) {}
+      morphGhost(pill, from, to, 280, rad, function(){
         pillMorphCleanup(dock, pill);
-      }, 340);
+        pillChildrenFade(pill, '1', 0.12, 0);
+        if (after) { after(); }
+      });
     }
-    // 收纳：原地缩进图标落位，落点瞬间提交收纳态（期间保持开态，避免轮询中途翻转）。
-    // v69：拖动反馈已把胶囊 translate 偏移了 dockDragTy——起始 transform 并入同一偏移，
-    // 过渡从跟手位置继续缩放，不会先跳回原位再缩
+    // 收纳：替身原地缩进图标落位，落点瞬间提交收纳态（期间保持开态，避免轮询中途翻转）。
+    // v69：拖动反馈的 dockDragTy 偏移并入替身起点，飞行从跟手位置继续
     function morphMinimize(dock, pill){
       var to = iconHomeRect();
       var from = rectOf(pill);
-      var preTy = dockDragTy || 0;
+      from.y += (dockDragTy || 0);
       dock.classList.add('zcode-composer-morph');
-      pill.style.transformOrigin = (to.x + to.w / 2 - from.x) + 'px ' + (to.y + to.h / 2 - from.y) + 'px';
-      pill.style.transition = 'transform 0.26s cubic-bezier(0.2,0.8,0.2,1), border-radius 0.26s cubic-bezier(0.2,0.8,0.2,1)';
-      pillChildrenFade(pill, '0', 0.16, 0);
-      pill.style.transform = 'translateY(' + preTy.toFixed(1) + 'px) scale(' + (to.w / Math.max(1, from.w)) + ',' + (to.h / Math.max(1, from.h)) + ')';
-      pill.style.borderRadius = '50%';
-      var tok = ++morphTok;
-      setTimeout(function(){
-        if (tok !== morphTok) { return; }
+      morphGhost(pill, from, to, 260, '50%', function () {
         composerOpen = false;
         composerFull = false;
         pendingOpen = false;
@@ -1061,25 +1299,30 @@
         syncComposer();
         holeBurst();   // v68b：收纳翻转露出 121px 新视口，快速查几拍空洞
         uiLog('composer-hide');
-      }, 300);
+      });
     }
-    // 浮动⇄全屏：同一元素 FLIP
+    // 浮动⇄全屏：同一元素 FLIP（替身飞行，真身落位后现身）
     function morphFlip(dock, pill, from){
       var to = rectOf(pill);
       if (!(to.w > 0)) { return; }
       dock.classList.add('zcode-composer-morph');
-      pill.style.transformOrigin = 'top left';
-      pill.style.transform = 'translate(' + (from.x - to.x) + 'px,' + (from.y - to.y) + 'px) scale(' + (from.w / Math.max(1, to.w)) + ',' + (from.h / Math.max(1, to.h)) + ')';
-      pillChildrenFade(pill, '0', 0, 0);
-      void pill.offsetWidth;
-      pill.style.transition = 'transform 0.26s cubic-bezier(0.2,0.8,0.2,1)';
-      pill.style.transform = 'none';
-      pillChildrenFade(pill, '1', 0.24, 0.05);
-      var tok = ++morphTok;
-      setTimeout(function(){
-        if (tok !== morphTok) { return; }
+      pillChildrenFade(pill, '0', 0, 0);   // 内容随落位淡入，避免换回真身时瞬现
+      var rad = '';
+      try { rad = getComputedStyle(pill).borderRadius || ''; } catch (e0) {}
+      morphGhost(pill, from, to, 260, rad, function(){
         pillMorphCleanup(dock, pill);
-      }, 320);
+        pillChildrenFade(pill, '1', 0.12, 0);
+      });
+    }
+    // v79②：等 morph/closing 动画窗口过去再执行 fn（双击直进全屏要避开飞行窗口，
+    // 两段 morph 的 morphTok 会互相顶掉对方的替身清理，漏出隐藏中的真身）
+    function whenMorphDone(fn, tries){
+      var dk = getDock();
+      if (dk && (dk.classList.contains('zcode-composer-morph') || dk.classList.contains('zcode-composer-closing'))) {
+        if ((tries || 0) < 14) { setTimeout(function(){ whenMorphDone(fn, (tries || 0) + 1); }, 60); }
+        return;
+      }
+      fn();
     }
     // ---------- 左下角收纳图标（v66 悬浮化）：有消息未唤出时的唯一底栏元素 ----------
     // 挂在 body 层 fixed 悬浮（不占流内空间，消息列表直接铺到屏幕底部）；
@@ -1096,8 +1339,16 @@
       }
       if (composerOpen || dock.classList.contains('zcode-popup-mode') ||
           dock.classList.contains('zcode-popup-present')) {
+        // v79②：双击宽限——图标单击唤出后 380ms 内改"隐形但可接"（opacity:0 仍收触摸，
+        // display:none 会收不到第二击），morph 替身从图标位起飞的同时图标淡出，无双影；
+        // 宽限窗外维持原瞬时隐藏
+        if (composerOpen && lastIconTapAt > 0 && Date.now() - lastIconTapAt < 380 && ic) {
+          ic.style.opacity = '0';
+          updateGestureExclude();
+          return;
+        }
         // 唤出态/弹窗态藏图标：与输入框的切换由容器变换负责，这里瞬时切换
-        if (ic) { ic.style.display = 'none'; }
+        if (ic) { ic.style.display = 'none'; ic.style.opacity = ''; }
         updateGestureExclude();
         return;
       }
@@ -1119,6 +1370,7 @@
         (isShadow ? root : doc.body || doc.documentElement).appendChild(ic);
       }
       ic.style.display = 'flex';
+      ic.style.opacity = '';   // v79②：清掉双击宽限期的隐形
       ic.style.transform = '';   // v69：清掉上次手势的跟手偏移，图标每次复出都从原位开始
       updateGestureExclude();
     }
@@ -1131,7 +1383,7 @@
       if (composerOpen) { hideComposer(); }
       else { showComposer(); }
     }
-    function showComposer(focus){
+    function showComposer(autofocus){
       var dock = getDock();
       if (!dock) {
         // dock 还在渲染中：标记待开，1s 轮询到位后自动弹出（不给用户静默无反馈）
@@ -1157,14 +1409,24 @@
       var pill0 = dock.querySelector('.rounded-2xl');
       var ic0 = doc.getElementById('zcode-composer-icon');
       var from = (ic0 && ic0.style.display !== 'none' && ic0.offsetWidth > 0) ? rectOf(ic0) : iconHomeRect();
-      syncComposer();
-      if (wasBottom && tlKeep) { try { tlKeep.scrollTop = tlKeep.scrollHeight; } catch (eK2) {} }
       var pill = dock.querySelector('.rounded-2xl');
-      if (morphable(pill, dock)) { morphReveal(dock, pill, from); }
-      // 聚焦输入框：键盘跟随弹出；自动恢复态传 focus=false，不弹键盘
-      // v69：等容器变换落定（~340ms）再聚焦——键盘引发的视口 resize 和 morph 动画重叠
-      // 是实机"打开闪烁/顿挫"的来源之一，改成先后接续的两段运动
-      if (focus !== false) {
+      var willMorph = morphable(pill, dock);
+      // v78：飞行期间不落垫不抢同步——真身隐藏中，布局变化会穿帮；垫与状态同步挪到
+      // morphReveal 落位回调，tl 的 padding 过渡（02_style）让"列表让位"成为连续滑动。
+      // 保底滚动与替身飞行并行（同为缓动曲线，同向运动）；目标算在垫之前，末条恰好
+      // 停在（即将到位的）胶囊上沿。非动画路径保持原即时行为。
+      if (!willMorph) { syncComposer(); }
+      if (wasBottom && tlKeep) {
+        try { tlKeep.scrollTo({ top: tlKeep.scrollHeight, behavior: willMorph ? 'smooth' : 'auto' }); }
+        catch (eK2) { try { tlKeep.scrollTop = tlKeep.scrollHeight; } catch (eK3) {} }
+      }
+            if (willMorph) { morphReveal(dock, pill, from, function(){ syncComposer(); }); }
+      // v77：默认只弹胶囊不拉键盘。用户实测"弹出输入框+键盘同时起来远远不够平滑"——
+      // 胶囊 morph、让位垫、滚动补偿、IME 逐帧 resize 四件事叠在同一瞬间；键盘改为
+      // 用户亲手点输入框才起来（原生 focus 由点击触发，系统动画跟手）。
+      // 参数反转：旧签名 focus!==false 就聚焦；新签名只有显式传 true 才聚焦——
+      // 现无调用方传 true，留作以后"打开时自动弹键盘"设置项的钩子。
+      if (autofocus === true) {
         try {
           var ta = dock.querySelector('[data-testid^="v4-composer-input"], textarea, input[type="text"]');
           if (ta) { setTimeout(function(){ try { ta.focus(); } catch (e2) {} }, 360); }
@@ -1213,6 +1475,152 @@
         }
       }
       uiLog('composer-hide');
+    }
+
+    // ---------- v79⑧：长按消息快捷菜单（复制全文 / 引用） ----------
+    // 长按 520ms 且位移 <10px → 底部动作条。z.ai 行本身支持原生长按文本选择：菜单出现
+    // 后 420ms 内若发生 selectionchange/contextmenu（原生选择已接管）就自动让位收起，
+    // 两套长按行为互斥不叠加。落点排除 textarea/按钮/代码块——这些位置长按有原生语义。
+    var msgSheet = null, msgSheetCatcher = null, lp = null;
+    function hideMsgSheet(){
+      if (msgSheetCatcher) {
+        try { msgSheetCatcher.parentNode.removeChild(msgSheetCatcher); } catch (e0) {}
+        msgSheetCatcher = null;
+      }
+      if (!msgSheet) { return; }
+      var el = msgSheet; msgSheet = null;
+      if (ANIM_ON && !REDUCED) {
+        el.style.animation = 'zcodeFadeDownNoX 0.18s ease-in';
+        var done = function(){ if (el.parentNode) { el.parentNode.removeChild(el); } };
+        el.addEventListener('animationend', done, {once: true});
+        setTimeout(done, 420);
+      } else {
+        try { el.parentNode.removeChild(el); } catch (e1) {}
+      }
+    }
+    function rowCleanText(row){
+      var clone = row.cloneNode(true);
+      var btns = clone.querySelectorAll ? clone.querySelectorAll(TURN_NOISE_SEL) : [];
+      for (var i = 0; i < btns.length; i++) {
+        if (btns[i].parentNode) { btns[i].parentNode.removeChild(btns[i]); }
+      }
+      return (clone.textContent || '').trim();
+    }
+    function copyText(txt2){
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(txt2).then(function(){ hint('已复制'); }, function(){ copyTextFallback(txt2); });
+          return;
+        }
+      } catch (eC) {}
+      copyTextFallback(txt2);
+    }
+    function copyTextFallback(txt2){
+      try {
+        var ta = doc.createElement('textarea');
+        ta.value = txt2;
+        ta.style.cssText = 'position:fixed;left:-999px;top:0';
+        (doc.body || doc.documentElement).appendChild(ta);
+        ta.select();
+        doc.execCommand('copy');
+        ta.parentNode.removeChild(ta);
+        hint('已复制');
+      } catch (eF) { hint('复制失败，长按文本手动选择'); }
+    }
+    function sheetBtn(label, fn){
+      var b = doc.createElement('div');
+      b.textContent = label;
+      b.setAttribute('role', 'button');
+      b.style.cssText = 'flex:1;text-align:center;padding:13px 6px;color:var(--zc-text);font-size:14px;' +
+        'cursor:pointer;border-radius:10px;';
+      b.addEventListener('touchstart', function(){ b.style.background = 'var(--zc-hover)'; }, {passive:true});
+      b.addEventListener('touchend', function(){ b.style.background = ''; }, {passive:true});
+      b.addEventListener('click', fn);
+      return b;
+    }
+    function showMsgSheet(row){
+      hideMsgSheet();
+      msgSheet = doc.createElement('div');
+      msgSheet.id = 'zcode-msg-sheet';
+      msgSheet.style.cssText = 'position:fixed;left:50%;bottom:calc(14px + var(--zc-safe-b, 0px));transform:translateX(-50%);' +
+        'width:min(320px, 88vw);background:var(--zc-bg-strong);border:1px solid var(--zc-stroke);border-radius:16px;' +
+        '-webkit-backdrop-filter:blur(22px) saturate(1.4);backdrop-filter:blur(22px) saturate(1.4);' +
+        'display:flex;gap:4px;padding:6px;z-index:100000;box-shadow:0 14px 44px rgba(0,0,0,0.55);' +
+        anim('zcodeFadeUpNoX', '0.18s', 'cubic-bezier(0.2,0.8,0.2,1)');
+      msgSheet.appendChild(sheetBtn('复制全文', function(){
+        hideMsgSheet();
+        copyText(rowCleanText(row));
+      }));
+      msgSheet.appendChild(sheetBtn('引用', function(){
+        hideMsgSheet();
+        showComposer();
+        setTimeout(function(){
+          var dk = getDock();
+          var ta = dk ? dk.querySelector('[data-testid^="v4-composer-input"], textarea') : null;
+          if (!ta) { return; }
+          var q = '> ' + (rowCleanText(row).replace(/\s+/g, ' ').trim().slice(0, 140)) + '\n';
+          try {
+            var dsc = (window.HTMLTextAreaElement && Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value'));
+            if (dsc && dsc.set) { dsc.set.call(ta, q); } else { ta.value = q; }
+          } catch (eS2) { ta.value = q; }
+          ta.dispatchEvent(new Event('input', {bubbles: true}));
+          try { ta.focus(); } catch (eF2) {}   // 引用后聚焦：用户意图就是继续写
+        }, 380);
+      }));
+      (isShadow ? root : doc.body || doc.documentElement).appendChild(msgSheet);
+      msgSheetCatcher = doc.createElement('div');
+      msgSheetCatcher.id = 'zcode-msg-sheet-catcher';
+      msgSheetCatcher.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0);touch-action:none;';
+      msgSheetCatcher.addEventListener('touchstart', function(e){ e.preventDefault(); hideMsgSheet(); }, {passive:false});
+      msgSheetCatcher.addEventListener('mousedown', function(){ hideMsgSheet(); });
+      (isShadow ? root : doc.body || doc.documentElement).appendChild(msgSheetCatcher);
+      // 原生选择让位：菜单出现后短时间内出现选择/上下文菜单 → 收我们的
+      var yieldToNative = function(){ hideMsgSheet(); };
+      setTimeout(function(){
+        try { doc.removeEventListener('selectionchange', yieldToNative, true); } catch (eY1) {}
+        try { evRoot.removeEventListener('contextmenu', yieldToNative, true); } catch (eY2) {}
+      }, 420);
+      try { doc.addEventListener('selectionchange', yieldToNative, true); } catch (eY3) {}
+      try { evRoot.addEventListener('contextmenu', yieldToNative, true); } catch (eY4) {}
+      uiLog('msg-sheet');
+    }
+    function onLpStart(e){
+      lp = null;
+      if (!longPressMenu || !UI_ON || msgSheet) { return; }
+      if (e.touches && e.touches.length !== 1) { return; }
+      var t = evXY(e);
+      var tg = e.target;
+      if (!tg || !tg.closest) { return; }
+      if (tg.closest('textarea, input, select, button, a, [role="button"], code, pre, [data-v4-composer-dock="true"]')) { return; }
+      var row = tg.closest('[data-testid^="v4-row"]');
+      if (!row) { return; }
+      var box = { x: t.clientX, y: t.clientY, row: row, timer: 0 };
+      box.timer = setTimeout(function(){
+        if (lp === box && box.row.isConnected) { showMsgSheet(box.row); }
+        lp = null;
+      }, 520);
+      lp = box;
+    }
+    function onLpMove(e){
+      if (!lp) { return; }
+      var t = evXY(e);
+      if (Math.abs(t.clientX - lp.x) > 10 || Math.abs(t.clientY - lp.y) > 10) {
+        clearTimeout(lp.timer);
+        lp = null;
+      }
+    }
+    function onLpEnd(){
+      if (lp) { clearTimeout(lp.timer); lp = null; }
+    }
+    if (UI_ON) {
+      evRoot.addEventListener('touchstart', onLpStart, {passive:true});
+      evRoot.addEventListener('touchmove', onLpMove, {passive:true});
+      evRoot.addEventListener('touchend', onLpEnd, {passive:true});
+      evRoot.addEventListener('touchcancel', onLpEnd, {passive:true});
+      evRoot.addEventListener('scroll', function(){
+        if (msgSheet) { hideMsgSheet(); }
+        onLpEnd();
+      }, {passive:true, capture:true});
     }
 
     // ---------- 兜底手势：左缘上滑×3 + 右缘下滑×3（组合手势，诊断入口，不在任何 UI 文案里暴露） ----------

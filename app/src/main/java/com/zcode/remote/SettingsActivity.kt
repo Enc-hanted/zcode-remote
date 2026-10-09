@@ -78,6 +78,34 @@ class SettingsActivity : AppCompatActivity() {
             settings.restoreOnBottom = checked
         }
 
+        // v79①：发送后归位
+        val switchSendMinimize = findViewById<MaterialSwitch>(R.id.switchSendMinimize)
+        switchSendMinimize.isChecked = settings.sendMinimize
+        switchSendMinimize.setOnCheckedChangeListener { _, checked ->
+            settings.sendMinimize = checked
+        }
+
+        // v79③：键盘跟随·实验
+        val switchKbFollowExp = findViewById<MaterialSwitch>(R.id.switchKbFollowExp)
+        switchKbFollowExp.isChecked = settings.kbFollowExp
+        switchKbFollowExp.setOnCheckedChangeListener { _, checked ->
+            settings.kbFollowExp = checked
+        }
+
+        // v79⑧：长按消息快捷菜单
+        val switchLongPressMenu = findViewById<MaterialSwitch>(R.id.switchLongPressMenu)
+        switchLongPressMenu.isChecked = settings.longPressMenu
+        switchLongPressMenu.setOnCheckedChangeListener { _, checked ->
+            settings.longPressMenu = checked
+        }
+
+        // v79⑨：纯黑 AMOLED（实验）
+        val switchAmoledBlack = findViewById<MaterialSwitch>(R.id.switchAmoledBlack)
+        switchAmoledBlack.isChecked = settings.amoledBlack
+        switchAmoledBlack.setOnCheckedChangeListener { _, checked ->
+            settings.amoledBlack = checked
+        }
+
         // 后台保活
         val switchKeepAlive = findViewById<MaterialSwitch>(R.id.switchKeepAlive)
         val radioDuration = findViewById<RadioGroup>(R.id.radioDuration)
