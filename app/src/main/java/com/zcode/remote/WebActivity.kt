@@ -2977,7 +2977,7 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
             object : WindowInsetsAnimationCompat.Callback(
                 // 项目的 androidx.core 版本没把这组常量挂到 Compat 上，借平台常量
                 //（static final int 编译期内联，<30 的设备不会加载该类）
-                android.view.WindowInsetsAnimation.DISPATCH_MODE_CONTINUE_ON_SUBTREE,
+                android.view.WindowInsetsAnimation.Callback.DISPATCH_MODE_CONTINUE_ON_SUBTREE,
             ) {
                 override fun onProgress(
                     insets: WindowInsetsCompat,
