@@ -4,6 +4,29 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/)。
 
+## [未发布] — v76 工作区（bundleVer 53）
+
+- **1 秒轮询瘦身（减少每拍强制布局读）**：①空洞看门狗 covered 态（常态）不再每秒全量扫 section 取证——gapPx 改为诊断手势时刻现算（04_theme），看门狗只在真检出空洞时才扫；②body 弹窗扫描从 400ms 全文档轮询改为事件驱动——Radix 弹窗 portal 挂/卸 body 直接子层，childList 观察器即时触发（延迟反而更低），400ms 轮询降级为 2s 安全网兜非 portal 场景；③尾清静止闸门（v75）本就短路了流式期的全部测量
+- **tools/usb_diag/ —— 实机 USB 取证通道固化成仓库工具**（本轮破案方法论沉淀）：零依赖 Node≥22 脚本，CDP 直连 WebView。子命令：`status`（设备→pid→socket→转发→页面一条龙）/`eval`（真实页执行 JS，输出自动脱敏）/`webshot`/`screen`（物理屏真相）/`scan`+`blank`（像素级量化底部空白带，避开悬浮图标干扰位）/`frames`（帧采样振荡检测，自动报标准差与主周期）/`mut`（变异监听按 t%1000 相位聚合，点名内联样式攻防双方）/`mask`（底部渐隐遮罩同步差）/`log`（console/异常收集）/`fling`（⚠️ 真实触摸惯性滚动复现+自动回位）。README 含两桩破案实录与流程模板：**视觉异常必须物理屏像素级取证，DOM 探针只能证伪不能证实**
+
+## [未发布] — v75 工作区（bundleVer 52）
+
+- **修复"回复中（思考中/执行中）消息页每秒反复上下闪动位移"（实机 USB 变异日志抓的现行）**：高频帧采样实锤 scrollTop 以 1Hz 方波在 ±40px 间跳变（14806↔14846，两种状态都正好钉在 scrollHeight−视口高）；DOM 变异监听抓到攻防双方——我们的 1 秒轮询尾部清理把流式回合尾部的空占位条（`.min-h-5` 等）写 `display:none`（内容 −40px），React 流式重渲染每秒整段抹掉我们写的内联样式（+40px 回来），下一拍再收……页面钉底跟随，肉眼即"每秒上下闪"。且签名含 scrollHeight，流式期每拍必变、去重永远失效，攻防战不停
+- **修复＝静止闸门**：`syncTailBlank` 入口比对内容高度——与上一拍不同（流式输出中/滚动未停稳）整轮跳过、绝不动 DOM；连续两拍相同才清理一次。流式期间占位条留着无害（内容一直在长），停稳后一次性收掉只发生一次位移；自身改动导致的高度变化同样只多等一拍，幂等收敛。副产收益：流式期不再派发 resize/scroll（不再给 z.ai 虚拟列表火上浇油）、"滚动到底部"圆钮不再因 40px 跳变每秒显隐切换
+- 诊断卡 `maskState`（v74）继续可用；bundleVer 52
+
+## [未发布] — v74 工作区（bundleVer 51）
+
+- **"上滚后底部空白占位"真因确认并根修（实机 USB + Chrome DevTools 协议直连取证）**：空白不是虚拟列表丢内容，是 z.ai 自己给时间线内容列挂的**滚动跟随底部渐隐 CSS mask**——`mask-image: linear-gradient(black 0, black 566px, transparent 590px, …); mask-position: 0px <scrollTop>px; mask-size: 100% <视口高>px`，可见区底部恒定 ~120px 渐隐成透明；惯性滚动后 mask-position 与实际 scrollTop 脱同步时透明带更大（实机照片实测 ~190px）。此前所有 DOM 探针（elementFromPoint / innerText）都被它骗过——hit-test 与 innerText 均无视 mask，probe 报"有内容"而屏幕是白的，这是该问题拖了多版的直接原因
+- **修复**：收纳态（`zcode-float-on`）注入 `-webkit-mask-image:none!important` 摘除遮罩，消息直接画到底边；原生 dock 态（float off）保留 z.ai 原设计（渐隐用于与输入框过渡）。`[style*="mask-position"]` 属性选择器自门控——z.ai 卸掉 mask 时属性串消失即不匹配。已在实机页面注入同款 CSS 即时验证：物理屏像素扫描空白带 304px→113px（残余为抓帧瞬间的渲染尾差，DOM 内容一直到底）
+- 诊断卡新增 `maskState`（mask 存在性 / mask-position 与 scrollTop 同步差 syncDelta / 摘除是否生效 removed）——以后"底部发白"一发诊断即可分辨是遮罩回潮还是渲染空洞
+- 取证过程副产物（均为 z.ai 页面自身行为，非本项目缺陷）：fling 停稳后偶发整列表卸载重建（主线程卡 ~1s，scrollHeight 塌缩到视口高，~750ms 自愈）；`v4-timeline` 与 `v4-timeline-scroll` 两种 data-testid 会在不同会话状态下互换，注入选择器需两者都兼容（本次 CSS 已兼容）
+
+## [未发布] — v73 工作区（bundleVer 50）
+
+- **修复滚到上方后底部空白不消失（虚拟列表空洞）**：z.ai 页面用 @tanstack/react-virtual，上滚后渲染区间跟不上、视口底部留出未渲染空洞；v68b 的看门狗有三个缺陷——探测点只有底部中央（会被页面自带的"滚动到底部"圆钮和自家面板/遮罩挡成假空洞）、手段只有 1px 抖动（治不了"渲染区间算错"型）、6 次耗尽后永久沉默（空洞就这么留着）。升级：30%/50%/70% 三点探测任一命中内容即算覆盖、自家浮层（zcode-* 前缀）盖住的点判"不定"不出手；抖动三档升级（1px×2 → resize+scroll 双派发逼重测视口 → ±8px 真位移逼区间重算）；持续补到 24 拍，用户一亲手滚动即清零重来、自己抖动的回声（300ms 窗口）不误判为用户输入
+- 诊断卡新增 `holeState`（covered 检测态 / gapPx 空洞高度实测 / tries 当前档位 / userScrollAgo）——滚到上面复现空白后发一次诊断即可定位到档位
+
 ## [未发布] — v72 工作区（bundleVer 49）
 
 - **修复键盘盖住输入框（v70 边到边改造的回归）**：`setDecorFitsSystemWindows(false)` 之后 `adjustResize` 不再自动缩放窗口，键盘直接压在 WebView 上（实机"输入法完全遮住输入框"）——insets 监听把 IME inset 垫进 content 底部，键盘期 WebView 缩到键盘上方并随起落动画平滑过渡；键盘期底部安全区归零（WebView 底缘已落在键盘顶上，不再二次避让）

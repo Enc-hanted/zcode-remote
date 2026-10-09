@@ -39,10 +39,15 @@
   nav[data-testid="v4-turn-navigator"] .t em { color: #C9C9C9; font-style: normal; margin-right: 6px; }
 
   /* ===== 控制条（预览专用，z-index 高于注入层） ===== */
-  #ctl { position: fixed; left: 8px; right: 8px; bottom: 8px; z-index: 100001; background: #1A1A1A;
+  /* v73：控制条钉在顶部、默认收起——此前固定在底部且 z-index 100001 不透明，
+     恰好整块盖住图标/输入胶囊的活动带，人眼看页面"从来没有输入框"（脚本断言
+     offsetWidth 测不出被遮挡，一直没发现）。测试脚本直接调 window.* 函数，不依赖面板展开 */
+  #ctl { position: fixed; left: 8px; right: 8px; top: 8px; bottom: auto; z-index: 100001; background: #1A1A1A;
     border: 1px solid rgba(255,255,255,0.14); border-radius: 14px; padding: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-    font-size: 12px; color: #B8B8B8; }
-  #ctl h4 { margin: 0 0 6px; font-size: 12px; color: #F0F0F0; }
+    font-size: 12px; color: #B8B8B8; max-height: 44vh; overflow-y: auto; }
+  #ctl h4 { margin: 0; font-size: 12px; color: #F0F0F0; cursor: pointer; user-select: none; }
+  #ctl.zc-fold > :not(h4) { display: none; }
+  #ctl h4 { margin: 0; font-size: 12px; color: #F0F0F0; cursor: pointer; user-select: none; }
   #ctl .grp { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
   #ctl button { border: 1px solid rgba(255,255,255,0.16); background: rgba(255,255,255,0.06); color: #F0F0F0;
     border-radius: 8px; padding: 6px 10px; font-size: 12px; cursor: pointer; }
@@ -107,6 +112,10 @@
         <textarea data-testid="v4-composer-input" placeholder="给 ZCode 发消息…"></textarea>
         <button class="send">↑</button>
       </div>
+      <!-- 仿真工具行（真页 v4-composer 自带 group/toolbar；span 不进手势排除名单，纯视觉） -->
+      <div class="group/toolbar" style="display:flex;align-items:center;gap:12px;padding:6px 4px 0;font-size:17px;color:#8F8F8F">
+        <span>＋</span><span style="color:#D08700">！</span><span>◫</span><span style="margin-left:auto">◷</span>
+      </div>
     </div>
   </div>
 </div>
@@ -119,9 +128,9 @@
   <div class="t"><em>3</em>bundle 注入预览 OK</div>
 </nav>
 
-<!-- 控制条 -->
-<div id="ctl">
-  <h4>预览控制 · bundle 已注入 <span id="st">…</span></h4>
+<!-- 控制条（v73：顶部+默认收起，点标题展开；不再挡住底部被测 UI） -->
+<div id="ctl" class="zc-fold">
+  <h4 onclick="this.parentNode.classList.toggle('zc-fold')">预览控制 · bundle 已注入 <span id="st">…</span>（点击展开/收起）</h4>
   <div class="grp">
     <button onclick="simIconTap()">图标单击=唤出</button>
     <button onclick="simIconSwipe(80, 0, '图标右滑')">图标右滑=导航</button>

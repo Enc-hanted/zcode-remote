@@ -181,7 +181,7 @@
     function diagInfo(){
       var de = doc.documentElement;
       var out = {
-        bundleVer: 49,
+        bundleVer: 53,
         // v70：实机"动画不生效/交互生硬"排查项——系统减弱动效（REDUCED）会关掉全部注入
         // 动画；safeB 是原生边到边上报的底部安全区（0 = 旧壳/桌面/未上报）
         animOn: ANIM_ON,
@@ -316,6 +316,31 @@
           probe: bbProbe
         };
       } catch (eBB) { out.bottomBand = 'err'; }
+      // v73：空洞看门狗状态——实机"滚到上面底部仍有空白"取证。covered：-1未判定/
+      // 1覆盖/0空洞/2自家浮层挡着；gapPx=视口底到最低 section 底缘的实测距离（空洞
+      // 高度，-1=无 section）；tries=当前已尝试拍数（1-2 1px抖动/3-6 双派发/7+ ±8px
+      // 真位移）；userScrollAgo=距用户上次亲手滚动的秒数
+      // v76：gapPx 手势时刻现算——看门狗 covered 态不再每秒扫 section，读缓存会拿 -1
+      out.holeState = (function(){
+        var hg = -1;
+        try {
+          var hgTl = root.querySelector('[data-testid="v4-timeline"]') ||
+                     root.querySelector('[data-testid="v4-timeline-scroll"]');
+          if (hgTl) {
+            var hSecs = hgTl.querySelectorAll('section');
+            var hLow = -1;
+            for (var hi = 0; hi < hSecs.length; hi++) {
+              var hb = hSecs[hi].getBoundingClientRect().bottom;
+              if (hb > hLow) { hLow = hb; }
+            }
+            if (hLow >= 0) { hg = Math.round(window.innerHeight - hLow); }
+          }
+        } catch (eH) {}
+        return {
+          covered: holeCovered, gapPx: hg, tries: holeTries,
+          userScrollAgo: lastUserScrollAt ? Math.round((Date.now() - lastUserScrollAt) / 1000) : -1
+        };
+      })();
       // composerProbe：诊断当下重新查一次容器，确认选择器本身是否命中（与 dock=0 区分"从未找到"vs"找到后又丢了"）
       try {
         var liveDock = root.querySelector(COMPOSER_SEL);
@@ -398,6 +423,26 @@
           colCount: cols.length
         };
       } catch (e) { out.timelinePad = 'err'; }
+      // maskState（v74）：z.ai 底部渐隐遮罩取证——存在性 + mask-position 与 scrollTop 的
+      // 同步差（脱同步=透明带比 120px 大，"上滚底部空白"的真凶）+ v74 摘除是否生效
+      try {
+        var mEl = root.querySelector('[data-testid="v4-timeline"] [style*="mask-position"]') ||
+                  root.querySelector('[data-testid="v4-timeline-scroll"] [style*="mask-position"]');
+        if (mEl) {
+          var mCs = getComputedStyle(mEl);
+          var mPos = (mCs.webkitMaskPosition || mCs.maskPosition || '');
+          var mPosNum = parseFloat((mPos.match(/-?\d+(\.\d+)?px\s*$/)||['0'])[0]) || 0;
+          var mTl = root.querySelector('[data-testid="v4-timeline-scroll"]') ||
+                    root.querySelector('[data-testid="v4-timeline"]');
+          out.maskState = {
+            pos: mPos,
+            st: mTl ? Math.round(mTl.scrollTop) : -1,
+            syncDelta: mTl ? Math.round(mPosNum - mTl.scrollTop) : -999,
+            img: (mCs.webkitMaskImage || mCs.maskImage || '').slice(0, 40),
+            removed: /none/.test(mCs.webkitMaskImage || mCs.maskImage || '') ? 1 : 0
+          };
+        } else { out.maskState = { none: 1 }; }
+      } catch (e) { out.maskState = 'err'; }
       return out;
     }
     function showDiagCard(){

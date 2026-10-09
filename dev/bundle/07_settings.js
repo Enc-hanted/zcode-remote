@@ -8,7 +8,7 @@
     var bodyPopupTimer = null;   // v53：body 弹窗检测（Radix 菜单让位）
     if (floatInput && UI_ON) {
       composerTimer = setInterval(syncComposer, 1000);
-      bodyPopupTimer = setInterval(scanBodyPopups, 400);
+      bodyPopupTimer = setInterval(scanBodyPopups, 2000);   // v76: 即时性交给 bodyPopupObs，此处仅安全网;
     }
 
     // ---------- 设置即时生效 API（原生层从设置页返回时调用） ----------
@@ -61,7 +61,7 @@
         if (UI_ON) {
           ensureFxStyle();
           if (!composerTimer) { composerTimer = setInterval(syncComposer, 1000); }
-          if (!bodyPopupTimer) { bodyPopupTimer = setInterval(scanBodyPopups, 400); }
+          if (!bodyPopupTimer) { bodyPopupTimer = setInterval(scanBodyPopups, 2000); }   // v76: 即时性交给 bodyPopupObs，此处仅安全网
         } else {
           removeIcon();
           if (composerOpen) { hideComposer(); }

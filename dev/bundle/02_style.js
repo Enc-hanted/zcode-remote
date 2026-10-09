@@ -78,6 +78,18 @@
         // 实测 dock 自身用 display:none 已不占位，但 section 的 padding-bottom 与输入框常驻时
         // 配合是合理的（避免最后一条消息贴着输入框），dock 隐藏后这段就成了多余占位，清除。
         'html.zcode-float-on [data-testid="v4-timeline"] section{padding-bottom:0!important}' +
+        // 底部渐隐遮罩摘除（v74，实机 CDP 取证）：z.ai 给时间线内容列挂了跟随滚动的 CSS mask——
+        // mask-image: linear-gradient(black 0, black 566px, transparent 590px, …100%);
+        // mask-position: 0px <scrollTop>px; mask-size: 100% <视口高>px
+        // 可见区底部 ~120px 恒定渐隐成空白；惯性滚动后 mask-position 与 scrollTop 脱同步时
+        // 透明带更大（实机照片实测 190px）——这就是"上滚后底部空白占位"的真身。
+        // DOM 探针全被它骗过：hit-test/innerText 都无视 mask，probe 报"有内容"但屏幕是白的。
+        // 收纳态（float-on）dock 已隐藏，这层渐隐只剩空白，直接摘掉让消息画到底边；
+        // 原生 dock 态（float off）保留 z.ai 原设计（渐隐用于和输入框过渡）。
+        // [style*="mask-position"] 属性选择器：z.ai 卸掉 mask 时属性串消失即不匹配，自门控。
+        'html.zcode-float-on [data-testid="v4-timeline"] [style*="mask-position"],' +
+        'html.zcode-float-on [data-testid="v4-timeline-scroll"] [style*="mask-position"]' +
+        '{-webkit-mask-image:none!important;mask-image:none!important}' +
         // 弹窗模式：dock 临时显示为底部容器（不遮挡全屏），输入部分隐藏，弹窗可见可点
         // 容器变换进行中：压掉 float/full 态的入场 animation，几何交给 JS 的 transform 过渡
         '[data-v4-composer-dock="true"].zcode-composer-morph{animation:none!important}' +

@@ -247,6 +247,18 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
         // 实测 dock 自身用 display:none 已不占位，但 section 的 padding-bottom 与输入框常驻时
         // 配合是合理的（避免最后一条消息贴着输入框），dock 隐藏后这段就成了多余占位，清除。
         'html.zcode-float-on [data-testid="v4-timeline"] section{padding-bottom:0!important}' +
+        // 底部渐隐遮罩摘除（v74，实机 CDP 取证）：z.ai 给时间线内容列挂了跟随滚动的 CSS mask——
+        // mask-image: linear-gradient(black 0, black 566px, transparent 590px, …100%);
+        // mask-position: 0px <scrollTop>px; mask-size: 100% <视口高>px
+        // 可见区底部 ~120px 恒定渐隐成空白；惯性滚动后 mask-position 与 scrollTop 脱同步时
+        // 透明带更大（实机照片实测 190px）——这就是"上滚后底部空白占位"的真身。
+        // DOM 探针全被它骗过：hit-test/innerText 都无视 mask，probe 报"有内容"但屏幕是白的。
+        // 收纳态（float-on）dock 已隐藏，这层渐隐只剩空白，直接摘掉让消息画到底边；
+        // 原生 dock 态（float off）保留 z.ai 原设计（渐隐用于和输入框过渡）。
+        // [style*="mask-position"] 属性选择器：z.ai 卸掉 mask 时属性串消失即不匹配，自门控。
+        'html.zcode-float-on [data-testid="v4-timeline"] [style*="mask-position"],' +
+        'html.zcode-float-on [data-testid="v4-timeline-scroll"] [style*="mask-position"]' +
+        '{-webkit-mask-image:none!important;mask-image:none!important}' +
         // 弹窗模式：dock 临时显示为底部容器（不遮挡全屏），输入部分隐藏，弹窗可见可点
         // 容器变换进行中：压掉 float/full 态的入场 animation，几何交给 JS 的 transform 过渡
         '[data-v4-composer-dock="true"].zcode-composer-morph{animation:none!important}' +
@@ -648,7 +660,7 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
     function diagInfo(){
       var de = doc.documentElement;
       var out = {
-        bundleVer: 49,
+        bundleVer: 53,
         // v70：实机"动画不生效/交互生硬"排查项——系统减弱动效（REDUCED）会关掉全部注入
         // 动画；safeB 是原生边到边上报的底部安全区（0 = 旧壳/桌面/未上报）
         animOn: ANIM_ON,
@@ -783,6 +795,31 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
           probe: bbProbe
         };
       } catch (eBB) { out.bottomBand = 'err'; }
+      // v73：空洞看门狗状态——实机"滚到上面底部仍有空白"取证。covered：-1未判定/
+      // 1覆盖/0空洞/2自家浮层挡着；gapPx=视口底到最低 section 底缘的实测距离（空洞
+      // 高度，-1=无 section）；tries=当前已尝试拍数（1-2 1px抖动/3-6 双派发/7+ ±8px
+      // 真位移）；userScrollAgo=距用户上次亲手滚动的秒数
+      // v76：gapPx 手势时刻现算——看门狗 covered 态不再每秒扫 section，读缓存会拿 -1
+      out.holeState = (function(){
+        var hg = -1;
+        try {
+          var hgTl = root.querySelector('[data-testid="v4-timeline"]') ||
+                     root.querySelector('[data-testid="v4-timeline-scroll"]');
+          if (hgTl) {
+            var hSecs = hgTl.querySelectorAll('section');
+            var hLow = -1;
+            for (var hi = 0; hi < hSecs.length; hi++) {
+              var hb = hSecs[hi].getBoundingClientRect().bottom;
+              if (hb > hLow) { hLow = hb; }
+            }
+            if (hLow >= 0) { hg = Math.round(window.innerHeight - hLow); }
+          }
+        } catch (eH) {}
+        return {
+          covered: holeCovered, gapPx: hg, tries: holeTries,
+          userScrollAgo: lastUserScrollAt ? Math.round((Date.now() - lastUserScrollAt) / 1000) : -1
+        };
+      })();
       // composerProbe：诊断当下重新查一次容器，确认选择器本身是否命中（与 dock=0 区分"从未找到"vs"找到后又丢了"）
       try {
         var liveDock = root.querySelector(COMPOSER_SEL);
@@ -865,6 +902,26 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
           colCount: cols.length
         };
       } catch (e) { out.timelinePad = 'err'; }
+      // maskState（v74）：z.ai 底部渐隐遮罩取证——存在性 + mask-position 与 scrollTop 的
+      // 同步差（脱同步=透明带比 120px 大，"上滚底部空白"的真凶）+ v74 摘除是否生效
+      try {
+        var mEl = root.querySelector('[data-testid="v4-timeline"] [style*="mask-position"]') ||
+                  root.querySelector('[data-testid="v4-timeline-scroll"] [style*="mask-position"]');
+        if (mEl) {
+          var mCs = getComputedStyle(mEl);
+          var mPos = (mCs.webkitMaskPosition || mCs.maskPosition || '');
+          var mPosNum = parseFloat((mPos.match(/-?\d+(\.\d+)?px\s*$/)||['0'])[0]) || 0;
+          var mTl = root.querySelector('[data-testid="v4-timeline-scroll"]') ||
+                    root.querySelector('[data-testid="v4-timeline"]');
+          out.maskState = {
+            pos: mPos,
+            st: mTl ? Math.round(mTl.scrollTop) : -1,
+            syncDelta: mTl ? Math.round(mPosNum - mTl.scrollTop) : -999,
+            img: (mCs.webkitMaskImage || mCs.maskImage || '').slice(0, 40),
+            removed: /none/.test(mCs.webkitMaskImage || mCs.maskImage || '') ? 1 : 0
+          };
+        } else { out.maskState = { none: 1 }; }
+      } catch (e) { out.maskState = 'err'; }
       return out;
     }
     function showDiagCard(){
@@ -1005,7 +1062,8 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
       preview = null;
     }
     function hoverItemAt(x, y){
-      var el = doc.elementFromPoint(x, y);
+""" +
+"""      var el = doc.elementFromPoint(x, y);
       // 只在导航子树内找：手指在外面时 elementFromPoint 返回遮罩/页面节点，不能误报预览
       if (!el || !navEl || !navEl.contains(el)) { return null; }
       // 原生导航的条目是"无文字的小横条"，唯一可读的是 aria-label（"跳转到第 N 条问题"）；
@@ -1088,8 +1146,7 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
     // 渲染样式，"复制 编辑"照样混进条目；改为直接 removeChild，文本读取与渲染无关、稳定干净。
     // 克隆读取绝不改 live DOM。
     var TURN_NOISE_SEL = '[data-testid^="v4-copy-"], [data-testid^="v4-edit-"], ' +
-""" +
-"""      '[data-testid^="v4-feedback-"], [data-testid^="v4-fork-"], ' +
+      '[data-testid^="v4-feedback-"], [data-testid^="v4-fork-"], ' +
       // v64：3.14.x 新行类型（待执行命令/Subagent 卡片/队列项/待审卡片/用户输入卡）
       // 不混进导航条目正文（线上 bundle testid 取证）
       '[data-testid^="v4-pending-command"], [data-testid^="v4-subagent-"], ' +
@@ -1779,8 +1836,22 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
         return true;
       } catch (e) { return false; }
     }
+    var bodyPopupObs = null;   // v76：body 弹窗监听事件化（见 scanBodyPopups）
     function scanBodyPopups(){
       if (!UI_ON) { return; }
+      // v76 瘦身：Radix 弹窗 portal 挂/卸在 body 直接子层——childList 观察器即时触发
+      // 扫描（比 400ms 轮询延迟更低）；400ms 轮询降级为 2s 安全网，兜非 portal 场景与
+      // 观察器异常。观察器只看 childList，与 class 写入无反馈环。
+      if (!bodyPopupObs && doc.body) {
+        try {
+          bodyPopupObs = new MutationObserver(function(){
+            scanBodyPopups();
+            setTimeout(scanBodyPopups, 120);   // portal 挂载后内容/几何晚一拍到位
+            setTimeout(scanBodyPopups, 400);
+          });
+          bodyPopupObs.observe(doc.body, { childList: true });
+        } catch (e0) { bodyPopupObs = null; }
+      }
       var found = false;
       try {
         var all = doc.querySelectorAll(PAGE_POPUP_SEL);
@@ -1814,6 +1885,7 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
     var tailFixAt = 0;
     var tailFixPhantom = 0;
     var tailNudgeAt = 0;
+    var tailShLast = -1;   // v75：上拍内容高度（静止闸门，见 syncTailBlank）
     function tailRestoreAll(){
       if (tailSpacerEl) { tailSpacerEl.style.display = ''; tailSpacerEl = null; }
       for (var i = 0; i < tailFixed.length; i++) {
@@ -1893,6 +1965,15 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
       // 收了也会被重挂载弹回（"每秒收一遍-弹一遍"脉动的另一半）
       if (missingRowsTicks > 0 || dock.classList.contains('zcode-composer-morph') ||
           dock.classList.contains('zcode-composer-closing')) { return; }
+      // v75 静止闸门（回复中每秒上下闪动的根修，实机变异日志抓的现行）：
+      // 流式输出期尾清把空占位条 display:none（内容 −40px）→ React 流式重渲染整段
+      // 抹掉我们写的内联样式（+40px 回来）→ 下一秒轮询再收……攻防战让钉底页面每秒
+      // ±40px 上下跳。占位条在流式期间留着无害（内容一直在长，尾部本来就看不精确），
+      // 一律不动手；scrollHeight 与上一拍相同（连续两拍稳定 = 流式停、滚动停稳）才清理。
+      // 自身改动造成的高度变化同样只多等一拍，幂等收敛；撤垫（tailSig=null）的重评估
+      // 也顺延一拍，代价可忽略。
+      var shNow = tl.scrollHeight;
+      if (shNow !== tailShLast) { tailShLast = shNow; return; }
       var changed = false;
       try {
         var secs = tl.querySelectorAll('section');
@@ -2033,36 +2114,101 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
       }
       if (changed) { tailNudge(); }
     }
-    // ---------- 虚拟列表空洞修补（v68b） ----------
+    // ---------- 虚拟列表空洞修补（v68b；v73 升级） ----------
     // 上滚/收纳翻转后，虚拟列表（@tanstack/react-virtual）按旧区间渲染：视口底部会留一段
-    // 没有任何 section 覆盖的"空洞"（真机上渲染节流，可持续数秒、直到下次滚动才补——
-    // 用户实测"划到上面还是有空白"）。检测：视口底缘命中元素向上走到根都没有 SECTION
-    // （遮罩/图标/toast 不算内容），且不在内容末尾（距底 >40px）→ 1px 抖动滚动（异步回弹、
-    // 逼出两次真实 scroll 事件）强制重算渲染区间。每个空洞期最多抖 6 次、500ms 一拍，
-    // 覆盖恢复或状态翻转后重新计数——绝不持续跟用户抢滚动。
+    // 没有任何 section 覆盖的"空洞"（真机渲染节流下可持续数秒——用户实测"滚到上面
+    // 底部还是有空白占位"）。v68b 的 1px 抖动×6 次对"区间算错型"空洞无效且耗尽后永久沉默。
+    // v73 四点升级：
+    // ① 探测点 x 取 30%/50%/70% 三点，任一命中内容即算覆盖——页面自带的"滚动到底部"
+    //   圆钮悬在底部中央（28×28@171-199,742-770），单点探测会被它挡成假空洞；
+    //   自家浮层（面板/遮罩/toast，id 以 zcode- 开头）盖住的点不算数也不算空洞；
+    // ② 抖动升级三档：1px×2 →（无效）resize+scroll 双派发逼虚拟列表重测视口 rect →
+    //   （仍无效）±8px 真位移——区间算错型空洞只有滚动位置真变才会触发重算；
+    // ③ 不再 6 次后永久沉默：持续补到 24 拍（500ms 一拍），用户一亲手滚动就清零重来；
+    //   自己抖动的回声（300ms 内）不当用户输入，绝不跟人抢滚动；
+    // ④ 诊断卡 holeState：covered/gapPx（视口底到最低 section 底缘的实测距离）/tries/
+    //   userScrollAgo——滚到上面复现空白后发一次诊断即可定位到档位。
     var holeTries = 0;
     var holeLast = 0;
+    var holeCovered = -1;      // -1=本轮未判定 1=覆盖 0=空洞 2=自家浮层挡着（不定）
+    var holeGapPx = -1;        // 视口底到最低已渲染 section 底缘的距离
+    var holeLastAt = 0;
+    var lastUserScrollAt = 0;
+    var holeSelfAt = 0;        // 自己抖动 scrollTop 的时刻（区分回声与用户滚动）
+    var holeTlEl = null;
+    function holeProbePoint(fx){
+      var el = null;
+      try { el = doc.elementFromPoint(Math.round(window.innerWidth * fx), window.innerHeight - 2); } catch (e0) {}
+      for (var n = el; n && n.nodeType === 1; n = n.parentElement) {
+        if (n.tagName === 'SECTION' || (n.getAttribute && (n.getAttribute('data-testid') || '').indexOf('v4-row') === 0)) { return 1; }
+        if (n.id && n.id.indexOf('zcode-') === 0) { return 2; }
+      }
+      return 0;
+    }
+    function onHoleUserScroll(){
+      if (Date.now() - holeSelfAt < 300) { return; }   // 自己抖的回声，不当用户输入
+      lastUserScrollAt = Date.now();
+      holeTries = 0;   // 用户亲手滚动 = 虚拟列表正被真实事件驱动，计数重来
+    }
+    function ensureHoleScrollListen(){
+      var tl = root.querySelector('[data-testid="v4-timeline"]') || root.querySelector('[data-testid="v4-timeline-scroll"]');
+      if (!tl || tl === holeTlEl) { return; }
+      if (holeTlEl) { try { holeTlEl.removeEventListener('scroll', onHoleUserScroll, true); } catch (e0) {} }
+      holeTlEl = tl;
+      try { tl.addEventListener('scroll', onHoleUserScroll, { passive: true, capture: true }); } catch (e1) {}
+    }
     function fixViewportHole(){
       if (composerOpen || composerFull) { holeTries = 0; return; }
-      var tl = root.querySelector('[data-testid="v4-timeline"]') || root.querySelector('[data-testid="v4-timeline-scroll"]');
+      var tl = holeTlEl || root.querySelector('[data-testid="v4-timeline"]') || root.querySelector('[data-testid="v4-timeline-scroll"]');
       if (!tl) { return; }
-      var el = null;
-      try { el = doc.elementFromPoint(Math.round(window.innerWidth / 2), window.innerHeight - 2); } catch (e0) {}
-      var covered = false;
-      for (var n = el; n && n.nodeType === 1; n = n.parentElement) {
-        if (n.tagName === 'SECTION' || (n.getAttribute && (n.getAttribute('data-testid') || '').indexOf('v4-row') === 0)) { covered = true; break; }
+      var p1 = holeProbePoint(0.3), p2 = holeProbePoint(0.5), p3 = holeProbePoint(0.7);
+""" +
+"""      var covered = (p1 === 1 || p2 === 1 || p3 === 1);
+      // 自家浮层盖住任一探测点（面板/遮罩开着）：不定态，不出手也不清零
+      if (!covered && (p1 === 2 || p2 === 2 || p3 === 2)) {
+        holeCovered = 2; holeLastAt = Date.now(); return;
+      }
+      holeCovered = covered ? 1 : 0;
+      holeLastAt = Date.now();
+      // 空洞高度取证：最低 section 底缘离视口底多远（无 section = -1）。
+      // v76 瘦身：只在检出空洞（!covered，罕见路径）时才全量扫 section——covered 是
+      // 常态，每秒白扫十几个 rect 纯为诊断数据；诊断卡改为手势时刻现算（04_theme）
+      holeGapPx = -1;
+      if (!covered) {
+        try {
+          var secs = tl.querySelectorAll('section');
+          var low = -1;
+          for (var si = 0; si < secs.length; si++) {
+            var sb = secs[si].getBoundingClientRect().bottom;
+            if (sb > low) { low = sb; }
+          }
+          if (low >= 0) { holeGapPx = Math.round(window.innerHeight - low); }
+        } catch (eS) {}
       }
       var dist = tl.scrollHeight - tl.clientHeight - tl.scrollTop;
       if (covered || dist <= 40) { holeTries = 0; return; }
-      // v71：尾部清理刚通知过虚拟列表重算，先让窗口落定再判定空洞——两个修复器
-      // 不抢同一帧测量，避免"清完→抖动→重排→再清"互相放大
+      // v71：尾部清理刚通知过虚拟列表重算，先让窗口落定再判定——两个修复器不抢同一帧
       if (Date.now() - tailNudgeAt < 600) { return; }
       var now = Date.now();
-      if (now - holeLast > 500 && holeTries < 6) {
+      if (now - holeLast > 500 && holeTries < 24) {
         holeTries++; holeLast = now;
-        if (tl.scrollTop > 0) { tl.scrollTop -= 1; }
-        setTimeout(function(){ try { tl.scrollTop += 1; } catch (e1) {} }, 30);
-        uiLog('hole-nudge');
+        holeSelfAt = Date.now();
+        if (holeTries <= 2) {
+          if (tl.scrollTop > 0) { tl.scrollTop -= 1; }
+          setTimeout(function(){ try { holeSelfAt = Date.now(); tl.scrollTop += 1; } catch (e1) {} }, 30);
+          uiLog('hole-nudge');
+        } else if (holeTries <= 6) {
+          // 升级①：双派发——resize 逼虚拟列表重测滚动容器 rect（视口高度变化型空洞）
+          try { window.dispatchEvent(new Event('resize')); } catch (e2) {}
+          try { tl.dispatchEvent(new Event('scroll')); } catch (e3) {}
+          uiLog('hole-reshout');
+        } else {
+          // 升级②：真位移 ±8px——区间算错型空洞只有滚动位置真变才触发重算，
+          // 异步弹回原位，视觉上是 8px 的一下轻颤
+          if (tl.scrollTop > 8) { tl.scrollTop -= 8; }
+          setTimeout(function(){ try { holeSelfAt = Date.now(); tl.scrollTop += 8; } catch (e4) {} }, 60);
+          uiLog('hole-kick');
+        }
       }
     }
     function holeBurst(){
@@ -2166,11 +2312,11 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
       }
       ensureIcon(dock);   // v66：收纳图标同步（悬浮层，跟随 float-on/open/popup 状态显隐 + 手势豁免上报）
       applySafeB();   // v70：底部安全区 → --zc-safe-b（图标/悬浮/全屏 bottom 引用）
+      ensureHoleScrollListen();   // v73：滚动容器监听（用户亲手滚动 → 空洞计数清零；重挂载自动续接）
       // v72：悬浮/弹窗让位垫（见 needOverlayPad 注释）——收纳态先撤垫再测尾部，
       // 悬浮/弹窗态先尾部还原、后落垫
       var padNeed = needOverlayPad(dock);
-""" +
-"""      if (padNeed === 0) { clearOverlayPad(); }
+      if (padNeed === 0) { clearOverlayPad(); }
       syncTailBlank(dock);   // v68/v69：收纳态底部残留逐一测量回收，末条消息贴屏底
       if (padNeed > 0) { setOverlayPad(padNeed); }
       // v66：dock 流内高度变化（收纳 0 ⇄ 唤出悬浮高 ⇄ 常驻 121）时通知虚拟列表重算，
@@ -2510,7 +2656,7 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
     var bodyPopupTimer = null;   // v53：body 弹窗检测（Radix 菜单让位）
     if (floatInput && UI_ON) {
       composerTimer = setInterval(syncComposer, 1000);
-      bodyPopupTimer = setInterval(scanBodyPopups, 400);
+      bodyPopupTimer = setInterval(scanBodyPopups, 2000);   // v76: 即时性交给 bodyPopupObs，此处仅安全网;
     }
 
     // ---------- 设置即时生效 API（原生层从设置页返回时调用） ----------
@@ -2563,7 +2709,7 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
         if (UI_ON) {
           ensureFxStyle();
           if (!composerTimer) { composerTimer = setInterval(syncComposer, 1000); }
-          if (!bodyPopupTimer) { bodyPopupTimer = setInterval(scanBodyPopups, 400); }
+          if (!bodyPopupTimer) { bodyPopupTimer = setInterval(scanBodyPopups, 2000); }   // v76: 即时性交给 bodyPopupObs，此处仅安全网
         } else {
           removeIcon();
           if (composerOpen) { hideComposer(); }
