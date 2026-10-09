@@ -45,7 +45,9 @@ object SystemBars {
     }
 
     /** 顶栏/底栏分别就近取色：状态栏用页面顶部附近的色，导航栏用底部附近的色，图标明暗自适应。
-     *  某侧采样失败时传 -1，该侧保持原样不动。 */
+     *  某侧采样失败时传 -1，该侧保持原样不动。
+     *  v70（边到边）：导航栏不再涂采样色——不透明色块会盖住铺到屏底的消息内容，重新变成
+     *  "底部空带"；保持透明让内容透过来，只按底部明暗切换手势条/三键图标对比色。 */
     fun applyBars(
         activity: Activity,
         tR: Int, tG: Int, tB: Int, tDark: Boolean,
@@ -57,7 +59,7 @@ object SystemBars {
             wic.isAppearanceLightStatusBars = !tDark
         }
         if (Build.VERSION.SDK_INT >= 28 && bR >= 0) {
-            activity.window.navigationBarColor = Color.rgb(bR, bG, bB)
+            activity.window.navigationBarColor = Color.TRANSPARENT
             wic.isAppearanceLightNavigationBars = !bDark
         }
     }

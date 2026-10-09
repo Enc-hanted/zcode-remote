@@ -164,9 +164,10 @@
     }
 
     // ---------- 自建面板兜底（真导航不存在时） ----------
-    // 只取气泡正文：克隆节点后隐藏行外的操作按钮（复制/编辑/反馈/分叉）再读 innerText
-    // （innerText 会忽略 display:none 的元素，避免"复制 编辑"混进导航条目）。
-    // 克隆读取绝不改 live DOM：改 display 再恢复 = 每行强制 reflow，且读取失败会让按钮永久隐藏。
+    // 只取气泡正文：克隆节点后把行外操作按钮（复制/编辑/反馈/分叉）从克隆里移除再读文本。
+    // v70：display:none + innerText 的方案在实机上失效——innerText 对脱离文档的克隆不计算
+    // 渲染样式，"复制 编辑"照样混进条目；改为直接 removeChild，文本读取与渲染无关、稳定干净。
+    // 克隆读取绝不改 live DOM。
     var TURN_NOISE_SEL = '[data-testid^="v4-copy-"], [data-testid^="v4-edit-"], ' +
       '[data-testid^="v4-feedback-"], [data-testid^="v4-fork-"], ' +
       // v64：3.14.x 新行类型（待执行命令/Subagent 卡片/队列项/待审卡片/用户输入卡）
@@ -177,8 +178,10 @@
     function entryLabel(el, maxLen){
       var clone = el.cloneNode(true);
       var btns = clone.querySelectorAll ? clone.querySelectorAll(TURN_NOISE_SEL) : [];
-      for (var i = 0; i < btns.length; i++) { btns[i].style.display = 'none'; }
-      var txt = (clone.innerText || '').replace(/\s+/g, ' ').trim();
+      for (var i = 0; i < btns.length; i++) {
+        if (btns[i].parentNode) { btns[i].parentNode.removeChild(btns[i]); }
+      }
+      var txt = (clone.textContent || '').replace(/\s+/g, ' ').trim();
       if (txt.length > maxLen) { txt = txt.slice(0, maxLen) + '…'; }
       return txt;
     }
@@ -381,18 +384,23 @@
         hideNav();   // v63：亮度恢复已收进 hideNav
         return;
       }
+      if (panel) { closePanel(); return; }
+      // v70（实机"右滑什么都看不到"，用户拍板）：自建面板为主——原生轨道的藏法是
+      // 容器查询 display:none，强拉出来后位置/高度/可读性都不受控（36px 无字细条，
+      // v65/v69 两轮解锁都在实机翻车）；面板显示问题原文、点按跳转，每个像素都在
+      // 我们控制内。原生解锁降级为后备：行选择器失效（collectTurns=0）时仍有一线可见产物。
+      var turns = collectTurns();
+      if (turns.length) {
+        uiLog('nav-panel-' + turns.length);
+        buildPanel(turns);
+        vibrate();
+        hint('已唤出问题导航（点外部收起）');
+        return;
+      }
       if (showNav()) {
         hint('点横条跳到对应问题，点空白处收起');
         return;
       }
-      if (panel) { closePanel(); return; }
-      var turns = collectTurns();
-      if (!turns.length) {
-        hint('还没有可导航的消息，先去聊几句吧');
-        return;
-      }
-      buildPanel(turns);
-      vibrate();
-      hint('已唤出问题导航（点外部收起）');
+      hint('还没有可导航的消息，先去聊几句吧');
     }
 

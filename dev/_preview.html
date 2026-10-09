@@ -57,15 +57,38 @@
   <header><span class="dot"></span><span>远控会话 · 预览页（模拟 z.ai 页面结构）</span></header>
 
   <div class="row assistant group/assistant-row" data-testid="v4-row-101">
-    <div class="bubble">已就绪。这是一个<b>模拟聊天页</b>，bundle 注入后：三态输入（展开 ⇄ 左下角图标 ⇄ 全屏）、右滑图标开导航、toast 都能实际操作。底部控制条模拟触摸手势（桌面浏览器没有 touch 事件）。</div>
+    <section>
+      <div class="bubble">已就绪。这是一个<b>模拟聊天页</b>，bundle 注入后：三态输入（展开 ⇄ 左下角图标 ⇄ 全屏）、右滑图标开导航、toast 都能实际操作。底部控制条模拟触摸手势（桌面浏览器没有 touch 事件）。</div>
+    </section>
   </div>
   <div class="row user group/user-row" data-testid="v4-row-102">
     <div class="bubble">试试右滑左下角图标唤出导航？</div>
     <div class="ops"><button data-testid="v4-copy-102">复制</button><button data-testid="v4-edit-102">编辑</button></div>
   </div>
   <div class="row assistant group/assistant-row" data-testid="v4-row-103">
-    <div class="bubble">```js\nconst preview = true;\nconsole.log('bundle 注入预览 OK');\n```</div>
-    <div class="ops"><button data-testid="v4-copy-103">复制</button></div>
+    <section>
+      <div class="bubble">```js\nconst preview = true;\nconsole.log('bundle 注入预览 OK');\n```</div>
+      <div class="ops"><button data-testid="v4-copy-103">复制</button></div>
+    </section>
+  </div>
+  <!-- 填充消息：内容必须超过一屏（412×924），否则"phantom 空白"是内容不足而非残留，
+       尾部清理的 240px 闸门会正确拒绝，本地回归测不到回收分支 -->
+  <div class="row user group/user-row" data-testid="v4-row-104">
+    <section>
+      <div class="bubble">填充消息 1：底部空白回收链路需要内容超过一屏才能区分"内容不足"与"残留空白"。真机上虚拟列表的消息总高远超视口，phantom 只反映末节之后的残留。</div>
+    </section>
+  </div>
+  <div class="row assistant group/assistant-row" data-testid="v4-row-105">
+    <section>
+      <div class="bubble">填充消息 2：min-h-5 垫片模拟——真页每个 section 末尾带 gap-5+min-h-5 垫片，收纳态会露出成底部空白带。</div>
+      <div class="min-h-5"></div>
+    </section>
+  </div>
+  <div class="row user group/user-row" data-testid="v4-row-106">
+    <section>
+      <div class="bubble">填充消息 3：这条是最后的消息行，它之后的空白才是 syncTailBlank 的回收对象。</div>
+      <div class="min-h-5"></div>
+    </section>
   </div>
 </div>
 

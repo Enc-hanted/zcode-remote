@@ -181,7 +181,12 @@
     function diagInfo(){
       var de = doc.documentElement;
       var out = {
-        bundleVer: 46,
+        bundleVer: 48,
+        // v70：实机"动画不生效/交互生硬"排查项——系统减弱动效（REDUCED）会关掉全部注入
+        // 动画；safeB 是原生边到边上报的底部安全区（0 = 旧壳/桌面/未上报）
+        animOn: ANIM_ON,
+        reducedMotion: REDUCED,
+        safeB: safeB(),
         // 脱敏：sid/hash 是现行链接凭证（3.14.4 实测仍用），remote=<id> 是新版 WebSocket 凭证、
         // token/ticket 是 /ws/remote-control/window/<token> 子系统的凭证形态（线上 bundle 取证），
         // mid 是设备稳定标识——粘贴诊断前全部打码
@@ -260,6 +265,28 @@
         ' foundAt=' + composerFoundAt +
         ' icon=' + (function(){ var d = getDock(); return d ? (d.querySelector('#zcode-composer-icon') ? 1 : 0) : 0; })() +
         ' popups=' + (function(){ var d = getDock(); return d ? d.querySelectorAll('.zcode-popup-visible').length : 0; })();
+      // v71：float 状态机健康度——实机"底部空白/填满一秒一变"排查项。
+      // everRows=已见过消息 missTicks=连续缺行轮数 hasRows=当下是否有行 dockH=dock 高度
+      // lastFloat=最近一次翻转的时刻与原因（rows/empty-session），翻转频繁即布局振荡实锤
+      try {
+        var dck = getDock();
+        out.floatState = {
+          on: doc.documentElement.classList.contains('zcode-float-on') ? 1 : 0,
+          hasRows: root.querySelector('[data-testid^="v4-row"]') ? 1 : 0,
+          everRows: rowsEverSeen ? 1 : 0,
+          missTicks: missingRowsTicks,
+          dockH: dck ? dck.offsetHeight : -1,
+          lastFloatAt: lastFloatAt ? new Date(lastFloatAt).toTimeString().slice(0, 8) : '',
+          lastFloatReason: lastFloatReason || ''
+        };
+      } catch (eFS) {}
+      // v71：尾部清理健康度——at=最近一次实际修复时刻 phantom=当时空白量
+      // nudgeAt=最近一次通知虚拟列表重算时刻（空洞看门狗据此让位 600ms）
+      out.tailFix = {
+        at: tailFixAt ? new Date(tailFixAt).toTimeString().slice(0, 8) : '',
+        phantom: tailFixPhantom,
+        nudgeAt: tailNudgeAt ? new Date(tailNudgeAt).toTimeString().slice(0, 8) : ''
+      };
       // composerProbe：诊断当下重新查一次容器，确认选择器本身是否命中（与 dock=0 区分"从未找到"vs"找到后又丢了"）
       try {
         var liveDock = root.querySelector(COMPOSER_SEL);

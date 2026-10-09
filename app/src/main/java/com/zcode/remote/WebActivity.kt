@@ -29,6 +29,9 @@ import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.NotificationCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -107,6 +110,15 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
     try { REDUCED = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) {}
 
     var NAV_SEL = 'nav[data-testid="v4-turn-navigator"], [aria-label="对话问题导航"]';
+
+    // ---------- 底部安全区（v70，边到边布局） ----------
+    // 原生层改边到边后，系统手势条/三键导航覆盖在 WebView 底部之上；WebActivity 把导航栏
+    // inset 换算成 CSS px 写进 window.__zcodeSafeB（页面每次加载后重新写入）。
+    // 图标/悬浮输入/全屏输入按这个值抬升，不压手势条；桌面/旧壳未注入时恒 0，无感兼容。
+    function safeB(){
+      var v = window.__zcodeSafeB;
+      return (typeof v === 'number' && v > 0 && v < 200) ? v : 0;
+    }
 
     // ---------- 保持后台连接：对页面谎报"始终可见" ----------
     // 聊天页通常会在隐藏（visibilitychange）时主动断开 WebSocket，
@@ -211,12 +223,17 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
         ':not(.zcode-composer-full):not(.zcode-popup-mode) [data-v4-composer-dock-content]{padding:0!important}' +
         // 收纳图标：悬浮在左下角内容之上（fixed，不属于任何流），黑灰毛玻璃小圆钮。
         // 右滑开导航（配合原生手势豁免）；与输入框的切换走容器变换（morphReveal/morphMinimize）
-        '#zcode-composer-icon{position:fixed;left:12px;bottom:12px;z-index:99996;margin:0;' +
+        // v70：bottom 抬升底部安全区（边到边后不压系统手势条）；
+        // touch-action:none——实机右滑/上滑完全没反应的元凶：默认 auto 下浏览器在 ~10px
+        // slop 后就把手势流抢去滚动/ overscroll（touchcancel），跟手反馈与 48px 阈值全被掐死；
+        // 44px 圆钮自身没有任何可滚动内容，关掉浏览器手势处理零代价
+        '#zcode-composer-icon{position:fixed;left:12px;bottom:calc(12px + var(--zc-safe-b, 0px));z-index:99996;margin:0;' +
         'display:flex;align-items:center;justify-content:center;' +
         'width:44px;height:44px;border-radius:22px;background:var(--zc-bg-strong);' +
         '-webkit-backdrop-filter:blur(18px) saturate(1.4);backdrop-filter:blur(18px) saturate(1.4);' +
         'border:1px solid var(--zc-stroke-strong);color:var(--zc-text-2);font-size:19px;line-height:1;' +
         'box-shadow:0 4px 18px rgba(0,0,0,0.35);cursor:pointer;user-select:none;-webkit-user-select:none;' +
+        'touch-action:none;' +
         (ANIM_ON && !REDUCED ? 'transition:opacity 0.15s,transform 0.12s;' : '') +
         '}' +
         '#zcode-composer-icon:active{opacity:0.7;' + (ANIM_ON && !REDUCED ? 'transform:scale(0.92);' : '') + '}' +
@@ -234,7 +251,7 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
         '[data-v4-composer-dock="true"].zcode-composer-morph{animation:none!important}' +
         'html.zcode-float-on [data-v4-composer-dock="true"].zcode-popup-mode{' +
         'display:block!important;visibility:visible!important;pointer-events:auto!important;' +
-        'position:fixed!important;left:50%!important;right:auto!important;bottom:0!important;top:auto!important;' +
+        'position:fixed!important;left:50%!important;right:auto!important;bottom:var(--zc-safe-b, 0px)!important;top:auto!important;' +
         'transform:translateX(-50%)!important;width:100%!important;max-width:760px!important;height:auto!important;' +
         'padding:0!important;margin:0!important;background:transparent!important;border:none!important;' +
         'box-shadow:none!important;z-index:99998!important;' +
@@ -252,7 +269,7 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
         // 注意：悬浮/全屏规则必须带 html.zcode-float-on 前缀提升特异性，否则会被上面的隐藏规则压住
         'html.zcode-float-on [data-v4-composer-dock="true"].zcode-composer-float{' +
         'display:flex!important;visibility:visible!important;pointer-events:auto!important;position:fixed!important;left:50%!important;right:auto!important;' +
-        'bottom:14px!important;top:auto!important;transform:translateX(-50%)!important;' +
+        'bottom:calc(14px + var(--zc-safe-b, 0px))!important;top:auto!important;transform:translateX(-50%)!important;' +
         'width:min(94vw,520px)!important;max-width:none!important;height:auto!important;' +
         'z-index:99998!important;pointer-events:auto!important;' +
         'padding:0!important;background:transparent!important;border:none!important;box-shadow:none!important;' +
@@ -289,7 +306,7 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
         'display:flex!important;visibility:visible!important;pointer-events:auto!important;position:fixed!important;left:0!important;right:0!important;bottom:0!important;top:0!important;' +
         'transform:none!important;width:100%!important;max-width:none!important;height:100%!important;' +
         'z-index:99999!important;pointer-events:auto!important;align-items:flex-end!important;justify-content:center!important;' +
-        'padding:0 0 20px!important;background:rgba(0,0,0,0.55)!important;border:none!important;' +
+        'padding:0 0 calc(20px + var(--zc-safe-b, 0px))!important;background:rgba(0,0,0,0.55)!important;border:none!important;' +
         anim('zcodeFadeIn', '0.18s', 'ease-out') +
         '}' +
         'html.zcode-float-on [data-v4-composer-dock="true"].zcode-composer-full.zcode-composer-closing{' +
@@ -341,8 +358,8 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
       var h = doc.createElement('div');
       h.id = 'zcode-nav-hint';
       h.textContent = text;
-      // 悬浮输入开着时上移，避免和输入胶囊重叠
-      var up = (doc.documentElement.classList.contains('zcode-float-on') && getDock()) ? 128 : 88;
+      // 悬浮输入开着时上移，避免和输入胶囊重叠；v70：再叠加底部安全区（边到边后不压手势条）
+      var up = ((doc.documentElement.classList.contains('zcode-float-on') && getDock()) ? 128 : 88) + safeB();
       h.style.cssText = 'position:fixed;left:50%;bottom:' + up + 'px;transform:translateX(-50%);' +
         'background:var(--zc-hint-bg);color:var(--zc-text);font-size:13px;line-height:1.4;padding:11px 18px;' +
         'border-radius:999px;z-index:99999;border:1px solid var(--zc-stroke);box-shadow:0 8px 26px rgba(0,0,0,0.4);' +
@@ -630,7 +647,12 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
     function diagInfo(){
       var de = doc.documentElement;
       var out = {
-        bundleVer: 46,
+        bundleVer: 48,
+        // v70：实机"动画不生效/交互生硬"排查项——系统减弱动效（REDUCED）会关掉全部注入
+        // 动画；safeB 是原生边到边上报的底部安全区（0 = 旧壳/桌面/未上报）
+        animOn: ANIM_ON,
+        reducedMotion: REDUCED,
+        safeB: safeB(),
         // 脱敏：sid/hash 是现行链接凭证（3.14.4 实测仍用），remote=<id> 是新版 WebSocket 凭证、
         // token/ticket 是 /ws/remote-control/window/<token> 子系统的凭证形态（线上 bundle 取证），
         // mid 是设备稳定标识——粘贴诊断前全部打码
@@ -709,6 +731,28 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
         ' foundAt=' + composerFoundAt +
         ' icon=' + (function(){ var d = getDock(); return d ? (d.querySelector('#zcode-composer-icon') ? 1 : 0) : 0; })() +
         ' popups=' + (function(){ var d = getDock(); return d ? d.querySelectorAll('.zcode-popup-visible').length : 0; })();
+      // v71：float 状态机健康度——实机"底部空白/填满一秒一变"排查项。
+      // everRows=已见过消息 missTicks=连续缺行轮数 hasRows=当下是否有行 dockH=dock 高度
+      // lastFloat=最近一次翻转的时刻与原因（rows/empty-session），翻转频繁即布局振荡实锤
+      try {
+        var dck = getDock();
+        out.floatState = {
+          on: doc.documentElement.classList.contains('zcode-float-on') ? 1 : 0,
+          hasRows: root.querySelector('[data-testid^="v4-row"]') ? 1 : 0,
+          everRows: rowsEverSeen ? 1 : 0,
+          missTicks: missingRowsTicks,
+          dockH: dck ? dck.offsetHeight : -1,
+          lastFloatAt: lastFloatAt ? new Date(lastFloatAt).toTimeString().slice(0, 8) : '',
+          lastFloatReason: lastFloatReason || ''
+        };
+      } catch (eFS) {}
+      // v71：尾部清理健康度——at=最近一次实际修复时刻 phantom=当时空白量
+      // nudgeAt=最近一次通知虚拟列表重算时刻（空洞看门狗据此让位 600ms）
+      out.tailFix = {
+        at: tailFixAt ? new Date(tailFixAt).toTimeString().slice(0, 8) : '',
+        phantom: tailFixPhantom,
+        nudgeAt: tailNudgeAt ? new Date(tailNudgeAt).toTimeString().slice(0, 8) : ''
+      };
       // composerProbe：诊断当下重新查一次容器，确认选择器本身是否命中（与 dock=0 区分"从未找到"vs"找到后又丢了"）
       try {
         var liveDock = root.querySelector(COMPOSER_SEL);
@@ -1009,9 +1053,10 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
     }
 
     // ---------- 自建面板兜底（真导航不存在时） ----------
-    // 只取气泡正文：克隆节点后隐藏行外的操作按钮（复制/编辑/反馈/分叉）再读 innerText
-    // （innerText 会忽略 display:none 的元素，避免"复制 编辑"混进导航条目）。
-    // 克隆读取绝不改 live DOM：改 display 再恢复 = 每行强制 reflow，且读取失败会让按钮永久隐藏。
+    // 只取气泡正文：克隆节点后把行外操作按钮（复制/编辑/反馈/分叉）从克隆里移除再读文本。
+    // v70：display:none + innerText 的方案在实机上失效——innerText 对脱离文档的克隆不计算
+    // 渲染样式，"复制 编辑"照样混进条目；改为直接 removeChild，文本读取与渲染无关、稳定干净。
+    // 克隆读取绝不改 live DOM。
     var TURN_NOISE_SEL = '[data-testid^="v4-copy-"], [data-testid^="v4-edit-"], ' +
       '[data-testid^="v4-feedback-"], [data-testid^="v4-fork-"], ' +
       // v64：3.14.x 新行类型（待执行命令/Subagent 卡片/队列项/待审卡片/用户输入卡）
@@ -1022,8 +1067,10 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
     function entryLabel(el, maxLen){
       var clone = el.cloneNode(true);
       var btns = clone.querySelectorAll ? clone.querySelectorAll(TURN_NOISE_SEL) : [];
-      for (var i = 0; i < btns.length; i++) { btns[i].style.display = 'none'; }
-      var txt = (clone.innerText || '').replace(/\s+/g, ' ').trim();
+      for (var i = 0; i < btns.length; i++) {
+        if (btns[i].parentNode) { btns[i].parentNode.removeChild(btns[i]); }
+      }
+      var txt = (clone.textContent || '').replace(/\s+/g, ' ').trim();
       if (txt.length > maxLen) { txt = txt.slice(0, maxLen) + '…'; }
       return txt;
     }
@@ -1048,7 +1095,8 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
       if (n < 14) {
         setTimeout(function(){
           var r2 = el.getBoundingClientRect();
-          if ((r2.width === 0 && r2.height === 0) || r2.top < -10 || r2.bottom > window.innerHeight + 10) {
+""" +
+"""          if ((r2.width === 0 && r2.height === 0) || r2.top < -10 || r2.bottom > window.innerHeight + 10) {
             jumpTo(el, n + 1);
           } else {
             flash(el);
@@ -1106,8 +1154,7 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
       close.addEventListener('touchstart', function(e){ e.stopPropagation(); }, {passive:true});
       close.onclick = closePanel;
       head.appendChild(grip); head.appendChild(title); head.appendChild(close);
-""" +
-"""      var list = doc.createElement('div');
+      var list = doc.createElement('div');
       list.style.cssText = 'overflow-y:auto;padding:8px 0;max-height:32vh;';
       var labels = [];   // 条目正文预取（拖动悬停预览用，避免拖动时逐条读 innerText）
       turns.forEach(function(el, i){
@@ -1227,19 +1274,24 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
         hideNav();   // v63：亮度恢复已收进 hideNav
         return;
       }
+      if (panel) { closePanel(); return; }
+      // v70（实机"右滑什么都看不到"，用户拍板）：自建面板为主——原生轨道的藏法是
+      // 容器查询 display:none，强拉出来后位置/高度/可读性都不受控（36px 无字细条，
+      // v65/v69 两轮解锁都在实机翻车）；面板显示问题原文、点按跳转，每个像素都在
+      // 我们控制内。原生解锁降级为后备：行选择器失效（collectTurns=0）时仍有一线可见产物。
+      var turns = collectTurns();
+      if (turns.length) {
+        uiLog('nav-panel-' + turns.length);
+        buildPanel(turns);
+        vibrate();
+        hint('已唤出问题导航（点外部收起）');
+        return;
+      }
       if (showNav()) {
         hint('点横条跳到对应问题，点空白处收起');
         return;
       }
-      if (panel) { closePanel(); return; }
-      var turns = collectTurns();
-      if (!turns.length) {
-        hint('还没有可导航的消息，先去聊几句吧');
-        return;
-      }
-      buildPanel(turns);
-      vibrate();
-      hint('已唤出问题导航（点外部收起）');
+      hint('还没有可导航的消息，先去聊几句吧');
     }
 
     // ---------- 三态机（v65，替代旧 logo + 胶囊）----------
@@ -1318,6 +1370,10 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
       var t = evXY(e);
       var dx = t.clientX - iconTrack.x, dy = t.clientY - iconTrack.y;
       iconFeedback(e.currentTarget, dx, dy);
+      // v70：6px 即 preventDefault——等越阈(48px)才拦太晚，浏览器在 ~10px slop 后就把
+      // 手势流抢走发 touchcancel（实机"右滑完全没反应、跟手动画会卡"的元凶）；
+      // 图标 CSS 已带 touch-action:none，这里是双保险（老 WebView 不认 touch-action 时兜底）
+      if (Math.abs(dx) > 6 || Math.abs(dy) > 6) { e.preventDefault(); }
       if (dx > 48 && Math.abs(dy) < 40) {
         iconTrack.done = true; iconTrack.dir = 'right';
         e.preventDefault();
@@ -1386,10 +1442,15 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
       var dx = t.clientX - dockTrack.x, dy = t.clientY - dockTrack.y;
       // v69：方向拖动反馈——胶囊跟手平移（0.45 倍率、±110px 封顶），越阈正式动画从跟手位置
       // 接力（morph 读实时 rect 并保留偏移），未越阈松手回弹——"这次滑动会不会触发"有了确定答案
-      if (dockTrack.pill && ANIM_ON && !REDUCED && Math.abs(dy) > 6 && Math.abs(dx) < 56) {
-        dockDragTy = Math.max(-110, Math.min(110, dy * 0.45));
-        dockTrack.pill.style.transition = 'none';
-        dockTrack.pill.style.transform = 'translateY(' + dockDragTy.toFixed(1) + 'px)';
+      // v70：进入纵向拖动就 preventDefault（不论动效开关）——手势落点已排除 textarea/按钮等
+      // 交互件，这里拦默认只挡浏览器抢手势（滚动/overscroll→touchcancel），不影响页面点击
+      if (Math.abs(dy) > 6 && Math.abs(dx) < 56) {
+        e.preventDefault();
+        if (dockTrack.pill && ANIM_ON && !REDUCED) {
+          dockDragTy = Math.max(-110, Math.min(110, dy * 0.45));
+          dockTrack.pill.style.transition = 'none';
+          dockTrack.pill.style.transform = 'translateY(' + dockDragTy.toFixed(1) + 'px)';
+        }
       }
       if (dy > 44 && Math.abs(dx) < 40) {
         dockTrack.done = true;
@@ -1481,6 +1542,15 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
     var composerOpen = false, composerFull = false, pendingOpen = false;   // pendingOpen: dock 未就绪时的待开标记
     var lastDockH = -1;   // v66：dock 流内高度跟踪（收纳 0 / 唤出悬浮 / 常驻 121），变化时通知列表重算
     var restoreOnBottom = true;   // v67 设置项"滑到底部恢复输入框"（原生 applySettings 热更）
+    // v71：虚拟列表换窗时可能短暂卸载全部 v4-row；不能把一次空 query 当成"新空会话"。
+    // 首次见到消息后，连续两轮（约 2 秒）都无行才允许摘 zcode-float-on，避免 dock
+    // 在 0 高/原生高度之间来回跳，进而触发 resize→虚拟列表重算→再次卸载的反馈回路。
+    var rowsEverSeen = false;
+    var missingRowsTicks = 0;
+    var ROW_MISS_LIMIT = 2;
+    var lastFloatState = null;
+    var lastFloatAt = 0;
+    var lastFloatReason = '';
     var composerFoundAt = -1, injectAt2 = Date.now();   // 渲染时序埋点（dock 首次找到耗时，诊断用）
     var uiTrace = [];   // UI 手势链路埋点（诊断用）
     function uiLog(act){
@@ -1492,6 +1562,19 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
     function getDock(){
       var d = root.querySelector(COMPOSER_SEL);
       return (d && d.parentNode) ? d : null;   // 必须仍在 DOM 中才算数
+    }
+    function setFloatState(on, reason){
+      var de = doc.documentElement;
+      if (!de) { return false; }
+      var prev = de.classList.contains('zcode-float-on');
+      if (prev === on) { return false; }
+      if (on) { de.classList.add('zcode-float-on'); }
+      else { de.classList.remove('zcode-float-on'); }
+      lastFloatState = on;
+      lastFloatAt = Date.now();
+      lastFloatReason = reason || '';
+      uiLog('float-' + (on ? 'on-' : 'off-') + (reason || 'state'));
+      return true;
     }
     // 圆弧图标（Qwen demo 几何）：一个 SVG 内两条弧——外弧 R+gap（悬浮态=扩大）、内弧 R−gap（全屏态=缩小），
     // 同圆心同跨角：46° 短弧跨在右上角 45° 对角线上（68°→22°，从水平轴起算），弱视觉贴合圆角。
@@ -1682,25 +1765,35 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
     }
     // 每次调用都基于 live dock：确保 expand 按钮在、当前 open/full 状态 class 正确。
     // 这是幂等的，可被轮询反复调用以跟随 React 重挂载。
-    // ---------- 底部残留清理（v68/v69） ----------
+    // ---------- 底部残留清理（v68/v69/v70） ----------
     // 收纳态的底部空白来源不止一处，逐一测量回收，唤出态全部原样恢复：
-    // A) 滚动容器级残留（v69，实机"空白遮罩依旧在"——用户确认是页面机制且不止 min-h-5 一处）：
-    //    容器自身 padding-bottom / 末节 margin-bottom / 末节之后的空壳兄弟（虚拟列表测高残留、
-    //    占位条）。口径：phantom = scrollHeight − 末节实际底边，>12px 才收；空壳必须无正文才动；
+    // A) 容器级残留（v70 升级为祖先链）：实机 0.0.4 空白带依旧——v64 取证就写明 3.14.4
+    //    把让位 padding 挂在 data-v4-timeline-content-column 等「末节的祖先」节点上，
+    //    v69 只收 timeline 自身 padding / 末节 margin / 末节后空兄弟，够不着祖先链。
+    //    现改为：末节 margin-bottom → 沿 lastSec 的祖先链逐层上溯到滚动容器（含），
+    //    收每层 padding-bottom + 每层在路径节点之后的无正文空壳兄弟。
+    //    口径不变：phantom = scrollHeight − 末节实际底边，>12px 才动手；
     //    每笔回收落 uiLog（tail-pad/tail-margin/tail-el），诊断卡可查到底收掉了什么。
     // B) 末节内部的 min-h-5 垫片（v68）：隐藏后 flex 尾随 gap 一并消失，共回收 40px。
     // 虚拟列表随时增删 turn：每次轮询重查、按引用恢复旧节点（已卸载则无害）；
     // 并校验垫片确实位于内容末尾（末条是用户消息时不动）；有变更才 nudge 虚拟列表重算。
     var tailSpacerEl = null;
     var tailFixed = [];   // v69：A 类回收记录 [{el, prop, val}]，唤出态恢复
+    // v71：去重与互斥状态——签名未变整轮跳过；nudge 时刻供空洞看门狗让位
+    var tailSig = null;
+    var tailFixAt = 0;
+    var tailFixPhantom = 0;
+    var tailNudgeAt = 0;
     function tailRestoreAll(){
       if (tailSpacerEl) { tailSpacerEl.style.display = ''; tailSpacerEl = null; }
       for (var i = 0; i < tailFixed.length; i++) {
         try { tailFixed[i].el.style[tailFixed[i].prop] = tailFixed[i].val; } catch (eF) {}
       }
       tailFixed = [];
+      tailSig = null;   // v71：修复被恢复 = 状态回退，作废签名让下轮重新评估（否则签名锁死、残留永不重收）
     }
     function tailNudge(){
+      tailNudgeAt = Date.now();
       try { window.dispatchEvent(new Event('resize')); } catch (e2) {}
       try {
         var tl2 = root.querySelector('[data-testid="v4-timeline"]');
@@ -1712,11 +1805,16 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
         !dock.classList.contains('zcode-composer-full') &&
         !dock.classList.contains('zcode-popup-mode');
       if (!minimized) {
+        tailSig = null;   // v71：状态翻转后作废签名，回收纳态时重新评估
         if (tailSpacerEl || tailFixed.length) { tailRestoreAll(); tailNudge(); }
         return;
       }
       var tl = root.querySelector('[data-testid="v4-timeline"]') || root.querySelector('[data-testid="v4-timeline-scroll"]');
       if (!tl) { return; }
+      // v71：缺行待确认/动画进行中跳过——虚拟列表正在换窗，此刻测量不可信，
+      // 收了也会被重挂载弹回（"每秒收一遍-弹一遍"脉动的另一半）
+      if (missingRowsTicks > 0 || dock.classList.contains('zcode-composer-morph') ||
+          dock.classList.contains('zcode-composer-closing')) { return; }
       var changed = false;
       try {
         var secs = tl.querySelectorAll('section');
@@ -1724,27 +1822,39 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
           var cr = tl.getBoundingClientRect();
           var lastSec = secs[secs.length - 1];
           var phantom = tl.scrollHeight - (lastSec.getBoundingClientRect().bottom - cr.top + tl.scrollTop);
+          // v71：签名去重——末节与 phantom 都没变 = 上一轮修复仍在位（回收本身幂等），
+          // 整轮跳过，不再测量/改写/通知；垫片状态随签名未变也必然稳定，一并跳过
+          var sig = (((lastSec.getAttribute('data-testid') || lastSec.className || '')) + '').slice(0, 60) +
+            '|' + Math.round(phantom) + '|' + tl.scrollHeight;
+          if (sig === tailSig) { return; }
+          tailSig = sig;
           // 上限闸门：>240px 的"空白"多半不是垫片/容器机制，而是虚拟列表只渲染了顶部区间
           // （未渲染区没有节点可回收）——那是 v68b 空洞看门狗的管辖，乱收会炸掉虚拟化
           if (phantom > 12 && phantom < 240) {
+            tailFixAt = Date.now();
+            tailFixPhantom = Math.round(phantom);
             var mb = parseFloat(getComputedStyle(lastSec).marginBottom) || 0;
             if (mb > 4 && mb < phantom) {
               tailFixed.push({ el: lastSec, prop: 'marginBottom', val: lastSec.style.marginBottom });
               lastSec.style.marginBottom = '0px';
               phantom -= mb; changed = true; uiLog('tail-margin');
             }
-            var pb = parseFloat(getComputedStyle(tl).paddingBottom) || 0;
-            if (pb > 4 && pb < phantom + 12) {
-              tailFixed.push({ el: tl, prop: 'paddingBottom', val: tl.style.paddingBottom });
-              tl.style.paddingBottom = '0px';
-              phantom -= pb; changed = true; uiLog('tail-pad');
-            }
-            var P = lastSec.parentElement;
-            if (P) {
-              var kids = P.children, after = false;
+            // v70：祖先链上溯（含滚动容器本身）——每层收 padding-bottom，以及该层在
+            // 路径节点之后的无正文空壳兄弟（测高残留/占位条）；SECTION（真消息）与
+            // zcode 自家节点、有正文的节点绝不动
+            var child = lastSec;
+            var anc = lastSec.parentElement;
+            while (anc && phantom > 12) {
+              var pbc = parseFloat(getComputedStyle(anc).paddingBottom) || 0;
+              if (pbc > 4 && pbc <= phantom + 12) {
+                tailFixed.push({ el: anc, prop: 'paddingBottom', val: anc.style.paddingBottom });
+                anc.style.paddingBottom = '0px';
+                phantom -= pbc; changed = true; uiLog('tail-pad');
+              }
+              var kids = anc.children, after = false;
               for (var k = 0; k < kids.length; k++) {
                 var ke = kids[k];
-                if (ke === lastSec) { after = true; continue; }
+                if (ke === child) { after = true; continue; }
                 if (!after || ke.tagName === 'SECTION' || (ke.id && ke.id.indexOf('zcode-') === 0)) { continue; }
                 if ((ke.textContent || '').trim()) { continue; }   // 有正文=真内容，绝不动
                 var kh = ke.offsetHeight;
@@ -1754,6 +1864,9 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
                   phantom -= kh; changed = true; uiLog('tail-el');
                 }
               }
+              if (anc === tl) { break; }
+              child = anc;
+              anc = anc.parentElement;
             }
           }
         }
@@ -1797,6 +1910,9 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
       }
       var dist = tl.scrollHeight - tl.clientHeight - tl.scrollTop;
       if (covered || dist <= 40) { holeTries = 0; return; }
+      // v71：尾部清理刚通知过虚拟列表重算，先让窗口落定再判定空洞——两个修复器
+      // 不抢同一帧测量，避免"清完→抖动→重排→再清"互相放大
+      if (Date.now() - tailNudgeAt < 600) { return; }
       var now = Date.now();
       if (now - holeLast > 500 && holeTries < 6) {
         holeTries++; holeLast = now;
@@ -1818,17 +1934,34 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
       // 单击时 dock 还没渲染：轮询到后再自动打开（见 showComposer 的 pendingOpen）
       if (pendingOpen) { pendingOpen = false; showComposer(); return; }
       // 空对话（无消息）保留原输入框常驻，有了消息才收纳成左下角图标
-      // 新 session 时 React 重挂载，无 v4-row → 输入框可见，符合"新对话不隐藏"的预期
-      var hasRows = root.querySelector('[data-testid^="v4-row"]');
+      // 新 session 时 React 重挂载，无 v4-row → 输入框可见，符合"新对话不隐藏"的预期。
+      // v71（实机"底部空白/填满一秒一变"）：hasRows 加迟滞——虚拟列表换窗/重渲染会瞬时
+      // 卸载全部行，单次空 query 不再直接摘 zcode-float-on（摘了 dock 立刻弹回原生高度、
+      // section padding 回弹，下轮行回来又收回去，正好一秒一闪）。有行立即确认；
+      // 无行需连续两轮且不在展开/弹窗/动画态，才认定真的是空会话翻回常驻输入框。
       var wasFloat = doc.documentElement.classList.contains('zcode-float-on');
-      if (hasRows) { doc.documentElement.classList.add('zcode-float-on'); }
-      else { doc.documentElement.classList.remove('zcode-float-on'); }
+      var hasRows = root.querySelector('[data-testid^="v4-row"]');
+      if (hasRows) {
+        rowsEverSeen = true;
+        missingRowsTicks = 0;
+        setFloatState(true, 'rows');
+      } else {
+        var dockAnimating = dock.classList.contains('zcode-composer-morph') ||
+          dock.classList.contains('zcode-composer-closing');
+        if (!composerOpen && !dock.classList.contains('zcode-popup-mode') && !dockAnimating) {
+          missingRowsTicks++;
+          if (missingRowsTicks >= ROW_MISS_LIMIT) {
+            rowsEverSeen = false;
+            missingRowsTicks = 0;
+            setFloatState(false, 'empty-session');
+          }
+        }
+      }
       // v62：dock 隐藏后触发虚拟列表重算——zcode 的 message 虚拟列表按"dock 在底部"预留空间，
       // dock display:none 后预留的 ~121px 不会被回收（最后一条消息不下移，底部空一块）。
       // dispatch resize 让虚拟列表（@tanstack/react-virtual 监听视口变化）重新测量并填满。
-      // 仅在状态切换时触发（避免每秒轮询都 dispatch）；首帧 wasFloat 恒 false 但首帧无虚拟列表，无副作用
-      var nowFloat = doc.documentElement.classList.contains('zcode-float-on');
-      if (nowFloat !== wasFloat) {
+      // v71：setFloatState 只在 class 真正翻转时返回 true，故这里每秒轮询不会重复 dispatch
+      if (doc.documentElement.classList.contains('zcode-float-on') !== wasFloat) {
         try { window.dispatchEvent(new Event('resize')); } catch (e2) {}
         try {
           var tl = root.querySelector('[data-testid="v4-timeline"]');
@@ -1873,29 +2006,36 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
         exp.classList.toggle('zc-full', composerFull);
         exp.setAttribute('aria-label', composerFull ? '收起输入框' : '展开全屏输入框');
       }
-      // 把当前状态落到 live 节点（重挂载后 class 会丢，这里补回来）。
-      // 必须先移除两个类再只加一个：如果只 add，从全屏缩回浮动时 zcode-composer-full
-      // 会残留，CSS 里 full 规则排在 float 之后且特异性相同 → full 永远赢 → 合不上（v38 修）。
-      // v69：收起动画进行中不动状态类——1s 轮询若在此窗口重写，closing 淡出会被掐断成
-      // 瞬间消失（实机"闪烁/顿挫"的关闭侧元凶）
-      if (!dock.classList.contains('zcode-composer-closing')) {
+      // 把当前状态落到 live 节点（重挂载后 class 会丢，这里补回来）。必须先移除两个类
+      // 再只加一个：如果只 add，从全屏缩回浮动时 zcode-composer-full 会残留，CSS 里
+      // full 规则排在 float 之后且特异性相同 → full 永远赢 → 合不上（v38 修）。
+      // v71：closing/morph 动画进行中不动状态类、不派发高度变化——1s 轮询若在动画窗口
+      // 内重写会把过渡掐断成跳变（v69 只守了 closing，这里补齐 morph）；动画落定处的
+      // 提交回调（morphMinimize/closing done）都会再调 syncComposer，在稳定帧补测
+      var dockAnimating = dock.classList.contains('zcode-composer-closing') ||
+        dock.classList.contains('zcode-composer-morph');
+      if (!dockAnimating) {
         dock.classList.remove('zcode-composer-float', 'zcode-composer-full');
         if (composerOpen) {
           dock.classList.add(composerFull ? 'zcode-composer-full' : 'zcode-composer-float');
         }
       }
       ensureIcon(dock);   // v66：收纳图标同步（悬浮层，跟随 float-on/open/popup 状态显隐 + 手势豁免上报）
+      applySafeB();   // v70：底部安全区 → --zc-safe-b（图标/悬浮/全屏 bottom 引用）
       syncTailBlank(dock);   // v68/v69：收纳态底部残留逐一测量回收，末条消息贴屏底
       // v66：dock 流内高度变化（收纳 0 ⇄ 唤出悬浮高 ⇄ 常驻 121）时通知虚拟列表重算，
-      // 让位跟着新高度走，旧高度不会残留成底部空带
-      var dh = dock.offsetHeight;
-      if (dh !== lastDockH) {
-        lastDockH = dh;
-        try { window.dispatchEvent(new Event('resize')); } catch (e4) {}
-        try {
-          var tl2 = root.querySelector('[data-testid="v4-timeline"]');
-          if (tl2) { tl2.dispatchEvent(new Event('scroll')); }
-        } catch (e5) {}
+      // 让位跟着新高度走，旧高度不会残留成底部空带。v71：动画进行中跳过——动画中的
+      // 中间高度没有意义，落定后的 syncComposer 会补上这次测量与派发
+      if (!dockAnimating) {
+        var dh = dock.offsetHeight;
+        if (dh !== lastDockH) {
+          lastDockH = dh;
+          try { window.dispatchEvent(new Event('resize')); } catch (e4) {}
+          try {
+            var tl2 = root.querySelector('[data-testid="v4-timeline"]');
+            if (tl2) { tl2.dispatchEvent(new Event('scroll')); }
+          } catch (e5) {}
+        }
       }
       // v68b：收纳态视口底部空洞检测+抖动修补（上滚/翻转后虚拟列表没跟上时）
       fixViewportHole();
@@ -1926,8 +2066,18 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
       return { x: r.left, y: r.top, w: r.width, h: r.height };
     }
     function iconHomeRect(){
-      // 收纳图标悬浮位（CSS: left:12px bottom:12px，44px）
-      return { x: 12, y: window.innerHeight - 56, w: 44, h: 44 };
+      // 收纳图标悬浮位（CSS: left:12px bottom:12px+安全区，44px）
+      return { x: 12, y: window.innerHeight - 56 - safeB(), w: 44, h: 44 };
+    }
+    // 底部安全区 → CSS 变量（v70）：原生层写 window.__zcodeSafeB，这里落到
+    // documentElement 的 --zc-safe-b，fxStyle 里图标/悬浮/全屏/弹窗的 bottom 全部引用。
+    // 挂 syncComposer（1s 轮询 + 状态切换），值变化才写；页面重载后首轮即生效。
+    var lastSafeB = -1;
+    function applySafeB(){
+      var b = safeB();
+      if (b === lastSafeB) { return; }
+      lastSafeB = b;
+      try { doc.documentElement.style.setProperty('--zc-safe-b', b + 'px'); } catch (e) {}
     }
     function pillChildrenFade(pill, op, dur, delay){
       var kids = pill.children;
@@ -2033,7 +2183,8 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
       }
       if (composerOpen || dock.classList.contains('zcode-popup-mode') ||
           dock.classList.contains('zcode-popup-present')) {
-        // 唤出态/弹窗态藏图标：与输入框的切换由容器变换负责，这里瞬时切换
+""" +
+"""        // 唤出态/弹窗态藏图标：与输入框的切换由容器变换负责，这里瞬时切换
         if (ic) { ic.style.display = 'none'; }
         updateGestureExclude();
         return;
@@ -2219,8 +2370,7 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
       // 与原生注入的 CSS_SCROLLBAR_HIDDEN/SLIM 同规则、后置覆盖，实现不重进会话的热切换
       st.textContent = hide ?
         '*{scrollbar-width:none!important;scrollbar-color:transparent transparent!important}' +
-""" +
-"""        '::-webkit-scrollbar{width:0!important;height:0!important;display:none!important}' +
+        '::-webkit-scrollbar{width:0!important;height:0!important;display:none!important}' +
         '::-webkit-scrollbar-track,::-webkit-scrollbar-thumb,::-webkit-scrollbar-button,::-webkit-scrollbar-corner{display:none!important;width:0!important;height:0!important}' :
         '*{scrollbar-width:thin!important;scrollbar-color:rgba(170,180,200,0.30) transparent!important;scrollbar-gutter:auto!important}' +
         '::-webkit-scrollbar{width:3px!important;height:3px!important}' +
@@ -2639,6 +2789,26 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_web)
+        // 边到边（v70，实机"消息列表底部有空带"的原生侧根因）：旧版根布局
+        // fitsSystemWindows=true 把系统导航栏整段垫在 WebView 下面（窗口底色空带，
+        // JS 怎么修都够不着）。改为：内容铺到物理屏底，顶部状态栏垫高保留；
+        // 底部 inset 不占 padding，换算成 CSS px 上报 JS（window.__zcodeSafeB），
+        // 注入层的图标/悬浮输入/全屏输入按它抬升、不压手势条。
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        if (Build.VERSION.SDK_INT >= 29) {
+            // 透明系统栏在 29+ 默认被强加半透明对比遮罩，关掉才是真透明
+            window.isStatusBarContrastEnforced = false
+            window.isNavigationBarContrastEnforced = false
+        }
+        ViewCompat.setOnApplyWindowInsetsListener(findViewById(android.R.id.content)) { v, insets ->
+            val bars = insets.getInsets(
+                WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout(),
+            )
+            // 底部垫高刻意为 0——键盘仍走 manifest 的 adjustResize（窗口级缩放，与本监听不冲突）
+            v.setPadding(bars.left, bars.top, bars.right, 0)
+            reportSafeB(bars.bottom)
+            WindowInsetsCompat.CONSUMED
+        }
         // debug 构建允许 WebView 远程调试：电脑 Chrome 打开 chrome://inspect 可直接
         // F12 式检查注入页面 DOM（定位弹窗/布局问题必备；release 构建自动关闭）
         WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG)
@@ -2770,11 +2940,27 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
         }
     }
 
+    /** 底部安全区（系统导航栏高度，CSS px）→ JS。注入层据此抬升图标/悬浮输入/全屏输入。
+     *  只在值变化时写；页面加载时机早于/晚于注入都可能，所以 injectMobileFix 的注入串里
+     *  也会带上当前值（页面重载后 window 属性被清空，必须随 bundle 重新写入）。 */
+    private var lastSafeB = 0
+
+    private fun reportSafeB(bottomPx: Int) {
+        val css = (bottomPx / resources.displayMetrics.density).toInt()
+        if (css == lastSafeB) return
+        lastSafeB = css
+        if (::webView.isInitialized && webView.url != null) {
+            webView.evaluateJavascript("window.__zcodeSafeB=$css;void 0", null)
+        }
+    }
+
     /** 注入广播式修正包：样式 + 巡检器 + 导航手势 + 主题回报 + 回复监听（一次注入，广播到所有同源文档）。 */
     private fun injectMobileFix() {
         val css = StringBuilder(MOBILE_CSS)
         css.append(if (settings.hideScrollbar) CSS_SCROLLBAR_HIDDEN else CSS_SCROLLBAR_SLIM)
-        val js = "(" + BUNDLE_JS.trim() + ")(" +
+        // v70：先写 safeB 再执行 bundle；BODY 内首轮 syncComposer 会立即落 CSS 变量，
+        // 不等 1s 轮询，避免真机首帧图标/输入框先贴到系统手势条再跳一下。
+        val js = "window.__zcodeSafeB=" + lastSafeB + ";(" + BUNDLE_JS.trim() + ")(" +
             JSONObject.quote(css.toString()) + ", " +
             settings.turnNavigator + ", " +
             settings.notifyReply + ", " +

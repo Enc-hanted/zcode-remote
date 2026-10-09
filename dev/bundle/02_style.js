@@ -55,12 +55,17 @@
         ':not(.zcode-composer-full):not(.zcode-popup-mode) [data-v4-composer-dock-content]{padding:0!important}' +
         // 收纳图标：悬浮在左下角内容之上（fixed，不属于任何流），黑灰毛玻璃小圆钮。
         // 右滑开导航（配合原生手势豁免）；与输入框的切换走容器变换（morphReveal/morphMinimize）
-        '#zcode-composer-icon{position:fixed;left:12px;bottom:12px;z-index:99996;margin:0;' +
+        // v70：bottom 抬升底部安全区（边到边后不压系统手势条）；
+        // touch-action:none——实机右滑/上滑完全没反应的元凶：默认 auto 下浏览器在 ~10px
+        // slop 后就把手势流抢去滚动/ overscroll（touchcancel），跟手反馈与 48px 阈值全被掐死；
+        // 44px 圆钮自身没有任何可滚动内容，关掉浏览器手势处理零代价
+        '#zcode-composer-icon{position:fixed;left:12px;bottom:calc(12px + var(--zc-safe-b, 0px));z-index:99996;margin:0;' +
         'display:flex;align-items:center;justify-content:center;' +
         'width:44px;height:44px;border-radius:22px;background:var(--zc-bg-strong);' +
         '-webkit-backdrop-filter:blur(18px) saturate(1.4);backdrop-filter:blur(18px) saturate(1.4);' +
         'border:1px solid var(--zc-stroke-strong);color:var(--zc-text-2);font-size:19px;line-height:1;' +
         'box-shadow:0 4px 18px rgba(0,0,0,0.35);cursor:pointer;user-select:none;-webkit-user-select:none;' +
+        'touch-action:none;' +
         (ANIM_ON && !REDUCED ? 'transition:opacity 0.15s,transform 0.12s;' : '') +
         '}' +
         '#zcode-composer-icon:active{opacity:0.7;' + (ANIM_ON && !REDUCED ? 'transform:scale(0.92);' : '') + '}' +
@@ -78,7 +83,7 @@
         '[data-v4-composer-dock="true"].zcode-composer-morph{animation:none!important}' +
         'html.zcode-float-on [data-v4-composer-dock="true"].zcode-popup-mode{' +
         'display:block!important;visibility:visible!important;pointer-events:auto!important;' +
-        'position:fixed!important;left:50%!important;right:auto!important;bottom:0!important;top:auto!important;' +
+        'position:fixed!important;left:50%!important;right:auto!important;bottom:var(--zc-safe-b, 0px)!important;top:auto!important;' +
         'transform:translateX(-50%)!important;width:100%!important;max-width:760px!important;height:auto!important;' +
         'padding:0!important;margin:0!important;background:transparent!important;border:none!important;' +
         'box-shadow:none!important;z-index:99998!important;' +
@@ -96,7 +101,7 @@
         // 注意：悬浮/全屏规则必须带 html.zcode-float-on 前缀提升特异性，否则会被上面的隐藏规则压住
         'html.zcode-float-on [data-v4-composer-dock="true"].zcode-composer-float{' +
         'display:flex!important;visibility:visible!important;pointer-events:auto!important;position:fixed!important;left:50%!important;right:auto!important;' +
-        'bottom:14px!important;top:auto!important;transform:translateX(-50%)!important;' +
+        'bottom:calc(14px + var(--zc-safe-b, 0px))!important;top:auto!important;transform:translateX(-50%)!important;' +
         'width:min(94vw,520px)!important;max-width:none!important;height:auto!important;' +
         'z-index:99998!important;pointer-events:auto!important;' +
         'padding:0!important;background:transparent!important;border:none!important;box-shadow:none!important;' +
@@ -133,7 +138,7 @@
         'display:flex!important;visibility:visible!important;pointer-events:auto!important;position:fixed!important;left:0!important;right:0!important;bottom:0!important;top:0!important;' +
         'transform:none!important;width:100%!important;max-width:none!important;height:100%!important;' +
         'z-index:99999!important;pointer-events:auto!important;align-items:flex-end!important;justify-content:center!important;' +
-        'padding:0 0 20px!important;background:rgba(0,0,0,0.55)!important;border:none!important;' +
+        'padding:0 0 calc(20px + var(--zc-safe-b, 0px))!important;background:rgba(0,0,0,0.55)!important;border:none!important;' +
         anim('zcodeFadeIn', '0.18s', 'ease-out') +
         '}' +
         'html.zcode-float-on [data-v4-composer-dock="true"].zcode-composer-full.zcode-composer-closing{' +
@@ -185,8 +190,8 @@
       var h = doc.createElement('div');
       h.id = 'zcode-nav-hint';
       h.textContent = text;
-      // 悬浮输入开着时上移，避免和输入胶囊重叠
-      var up = (doc.documentElement.classList.contains('zcode-float-on') && getDock()) ? 128 : 88;
+      // 悬浮输入开着时上移，避免和输入胶囊重叠；v70：再叠加底部安全区（边到边后不压手势条）
+      var up = ((doc.documentElement.classList.contains('zcode-float-on') && getDock()) ? 128 : 88) + safeB();
       h.style.cssText = 'position:fixed;left:50%;bottom:' + up + 'px;transform:translateX(-50%);' +
         'background:var(--zc-hint-bg);color:var(--zc-text);font-size:13px;line-height:1.4;padding:11px 18px;' +
         'border-radius:999px;z-index:99999;border:1px solid var(--zc-stroke);box-shadow:0 8px 26px rgba(0,0,0,0.4);' +

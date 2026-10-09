@@ -17,6 +17,15 @@ function(css, navOn, replyOn, floatInput, uiAnim){
 
     var NAV_SEL = 'nav[data-testid="v4-turn-navigator"], [aria-label="对话问题导航"]';
 
+    // ---------- 底部安全区（v70，边到边布局） ----------
+    // 原生层改边到边后，系统手势条/三键导航覆盖在 WebView 底部之上；WebActivity 把导航栏
+    // inset 换算成 CSS px 写进 window.__zcodeSafeB（页面每次加载后重新写入）。
+    // 图标/悬浮输入/全屏输入按这个值抬升，不压手势条；桌面/旧壳未注入时恒 0，无感兼容。
+    function safeB(){
+      var v = window.__zcodeSafeB;
+      return (typeof v === 'number' && v > 0 && v < 200) ? v : 0;
+    }
+
     // ---------- 保持后台连接：对页面谎报"始终可见" ----------
     // 聊天页通常会在隐藏（visibilitychange）时主动断开 WebSocket，
     // 导致后台收不到消息、回复通知无从谈起。注入后页面以为一直可见，连接不断。
