@@ -53,7 +53,11 @@
 </style>
 </head>
 <body>
-<div id="app" data-testid="v4-timeline-scroll" style="height:100vh;overflow-y:auto;overscroll-behavior:contain">
+<!-- v72 mock：真实页里 timeline 容器外面还有一圈"列布局"——tl 之后有无正文空壳条、
+     dock 槽壳（自身 padding/min-height 占位，dock 在真页是流内 sticky）。外底带回收
+     （tail-el-out / tail-dockpad-out / tail-pad-out）的对象就是这一圈。 -->
+<div id="col" style="height:100vh;display:flex;flex-direction:column">
+<div id="app" data-testid="v4-timeline-scroll" style="flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain">
   <header><span class="dot"></span><span>远控会话 · 预览页（模拟 z.ai 页面结构）</span></header>
 
   <div class="row assistant group/assistant-row" data-testid="v4-row-101">
@@ -92,22 +96,28 @@
   </div>
 </div>
 
+<!-- tl 之外的占位源 1：纯空壳条（无任何文字）——tail-el-out 的对象 -->
+<div id="mock-tail-strip" style="height:44px"></div>
+<!-- tl 之外的占位源 2：dock 槽壳——自身 padding-bottom/min-height 占位，包着 dock；
+     只允许收 padding/min-height，display 绝不能碰（popup 复活靠 dock） -->
+<div id="mock-dock-slot" style="padding-bottom:26px;min-height:34px">
+  <div data-v4-composer-dock="true">
+    <div data-testid="v4-composer">
+      <div class="rounded-2xl">
+        <textarea data-testid="v4-composer-input" placeholder="给 ZCode 发消息…"></textarea>
+        <button class="send">↑</button>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
 <!-- 真导航（页面自带，默认折叠） -->
 <nav data-testid="v4-turn-navigator" hidden>
   <div class="t"><em>1</em>已就绪。这是一个模拟聊天页…</div>
   <div class="t"><em>2</em>试试右滑左下角图标唤出导航？</div>
   <div class="t"><em>3</em>bundle 注入预览 OK</div>
 </nav>
-
-<!-- 输入 dock（页面原生常驻底部输入框） -->
-<div data-v4-composer-dock="true">
-  <div data-testid="v4-composer">
-    <div class="rounded-2xl">
-      <textarea data-testid="v4-composer-input" placeholder="给 ZCode 发消息…"></textarea>
-      <button class="send">↑</button>
-    </div>
-  </div>
-</div>
 
 <!-- 控制条 -->
 <div id="ctl">

@@ -31,6 +31,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.NotificationCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsAnimationCompat
 import androidx.core.view.WindowInsetsCompat
 import org.json.JSONArray
 import org.json.JSONObject
@@ -647,7 +648,7 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
     function diagInfo(){
       var de = doc.documentElement;
       var out = {
-        bundleVer: 48,
+        bundleVer: 49,
         // v70：实机"动画不生效/交互生硬"排查项——系统减弱动效（REDUCED）会关掉全部注入
         // 动画；safeB 是原生边到边上报的底部安全区（0 = 旧壳/桌面/未上报）
         animOn: ANIM_ON,
@@ -753,6 +754,35 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
         phantom: tailFixPhantom,
         nudgeAt: tailNudgeAt ? new Date(tailNudgeAt).toTimeString().slice(0, 8) : ''
       };
+      // v72：底部空带取证——实机"收纳态底部仍有空白带"定位用。tlBottom < innerH
+      // 即时间线容器没铺到屏底（空带在容器外，dock 槽位圈）；probe 逐行报底带里
+      // 实际压着什么元素（tag>链路，null=什么都没有）；padPx=悬浮让位垫当前值
+      try {
+        var bbTl = root.querySelector('[data-testid="v4-timeline"]') || root.querySelector('[data-testid="v4-timeline-scroll"]');
+        var bbDk = getDock();
+        var bbProbe = [];
+        var bbIh = window.innerHeight;
+        for (var bbDy = 8; bbDy <= 96; bbDy += 22) {
+          var bbEl = null;
+          try { bbEl = doc.elementFromPoint(Math.round(window.innerWidth / 2), bbIh - bbDy); } catch (eP0) {}
+          var bbChain = [];
+          for (var bbN = bbEl; bbN && bbN.nodeType === 1 && bbChain.length < 4; bbN = bbN.parentElement) {
+            var bbTid = bbN.getAttribute ? (bbN.getAttribute('data-testid') || '') : '';
+            bbChain.push(bbN.tagName + (bbTid ? '[' + bbTid + ']' : '') + (bbN.id ? '#' + bbN.id : ''));
+          }
+          bbProbe.push((bbIh - bbDy) + ':' + (bbChain.join('>') || 'null'));
+        }
+        out.bottomBand = {
+          tlBottom: bbTl ? Math.round(bbTl.getBoundingClientRect().bottom) : -1,
+          innerH: bbIh,
+          tlScrollH: bbTl ? bbTl.scrollHeight : -1,
+          tlClientH: bbTl ? bbTl.clientHeight : -1,
+          dockH: bbDk ? Math.round(bbDk.offsetHeight) : -1,
+          dockBottom: bbDk ? Math.round(bbDk.getBoundingClientRect().bottom) : -1,
+          padPx: (typeof overlayPadPx === 'number' ? overlayPadPx : -1),
+          probe: bbProbe
+        };
+      } catch (eBB) { out.bottomBand = 'err'; }
       // composerProbe：诊断当下重新查一次容器，确认选择器本身是否命中（与 dock=0 区分"从未找到"vs"找到后又丢了"）
       try {
         var liveDock = root.querySelector(COMPOSER_SEL);
@@ -1058,7 +1088,8 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
     // 渲染样式，"复制 编辑"照样混进条目；改为直接 removeChild，文本读取与渲染无关、稳定干净。
     // 克隆读取绝不改 live DOM。
     var TURN_NOISE_SEL = '[data-testid^="v4-copy-"], [data-testid^="v4-edit-"], ' +
-      '[data-testid^="v4-feedback-"], [data-testid^="v4-fork-"], ' +
+""" +
+"""      '[data-testid^="v4-feedback-"], [data-testid^="v4-fork-"], ' +
       // v64：3.14.x 新行类型（待执行命令/Subagent 卡片/队列项/待审卡片/用户输入卡）
       // 不混进导航条目正文（线上 bundle testid 取证）
       '[data-testid^="v4-pending-command"], [data-testid^="v4-subagent-"], ' +
@@ -1095,8 +1126,7 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
       if (n < 14) {
         setTimeout(function(){
           var r2 = el.getBoundingClientRect();
-""" +
-"""          if ((r2.width === 0 && r2.height === 0) || r2.top < -10 || r2.bottom > window.innerHeight + 10) {
+          if ((r2.width === 0 && r2.height === 0) || r2.top < -10 || r2.bottom > window.innerHeight + 10) {
             jumpTo(el, n + 1);
           } else {
             flash(el);
@@ -1800,13 +1830,61 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
         if (tl2) { tl2.dispatchEvent(new Event('scroll')); }
       } catch (e3) {}
     }
+    // ---------- 悬浮输入/弹窗让位垫（v72） ----------
+    // dock 悬浮(fixed)/弹窗期脱离文档流，消息列表不知道底部被盖住——最后一条消息
+    // 滚不出输入框上方（实机"关掉键盘后输入框挡住文本结尾"）。悬浮/弹窗态给滚动
+    // 容器垫 paddingBottom，收纳态撤掉。只认自己写的 inline 值，与尾清的配合固定：
+    // · 收纳态在 syncTailBlank 之前撤垫（防止垫被算进 phantom 乱收页面节点）
+    // · 悬浮态在 syncTailBlank 还原之后落垫（防止还原把垫盖掉）
+    var overlayPadPx = 0;
+    function overlayTl(){
+      return root.querySelector('[data-testid="v4-timeline"]') || root.querySelector('[data-testid="v4-timeline-scroll"]');
+    }
+    function needOverlayPad(dock){
+      if (!dock) { return 0; }
+      if (composerOpen && !composerFull) {
+        // 悬浮胶囊：胶囊实高 + 底部偏移14 + 安全区 + 呼吸位；胶囊内 textarea 变高
+        // 时 offsetHeight 跟着变，1s 轮询自适应
+        var dh = dock.offsetHeight;
+        if (dh > 8 && dh < window.innerHeight * 0.6) { return dh + 14 + safeB() + 10; }
+        return 0;
+      }
+      if (!composerOpen && (dock.classList.contains('zcode-popup-mode') || dock.classList.contains('zcode-popup-present'))) {
+        // 弹窗态 dock 同样 fixed 铺在底部
+        var ph = dock.offsetHeight;
+        if (ph > 8 && ph < window.innerHeight * 0.6) { return ph + safeB() + 8; }
+      }
+      return 0;
+    }
+    function setOverlayPad(want){
+      var t = overlayTl();
+      if (!t || want <= 0) { return; }
+      var vs = want + 'px';
+      if (overlayPadPx === want && t.style.paddingBottom === vs) { return; }
+      overlayPadPx = want;
+      try { t.style.paddingBottom = vs; } catch (e0) { return; }
+      tailNudge();
+    }
+    function clearOverlayPad(){
+      if (overlayPadPx <= 0) { return; }
+      overlayPadPx = 0;
+      var t = overlayTl();
+      if (t) { try { t.style.paddingBottom = ''; } catch (e1) {} }
+      tailSig = null;   // 撤垫后页面自己的 padding 会露回来，让尾清重新评估
+      tailNudge();
+    }
     function syncTailBlank(dock){
       var minimized = dock && !dock.classList.contains('zcode-composer-float') &&
         !dock.classList.contains('zcode-composer-full') &&
         !dock.classList.contains('zcode-popup-mode');
       if (!minimized) {
         tailSig = null;   // v71：状态翻转后作废签名，回收纳态时重新评估
-        if (tailSpacerEl || tailFixed.length) { tailRestoreAll(); tailNudge(); }
+        // v72：悬浮/全屏/弹窗态不还原外层壳——dock 是 fixed，槽位用不上；还原会
+        // 和悬浮让位垫叠成双重预留（胶囊下面一段死区，实机截图 B 的形态）。
+        // 只在退回原生常驻态（float-on 关闭，页面输入框回到底部）时全部还原。
+        if (!doc.documentElement.classList.contains('zcode-float-on') && (tailSpacerEl || tailFixed.length)) {
+          tailRestoreAll(); tailNudge();
+        }
         return;
       }
       var tl = root.querySelector('[data-testid="v4-timeline"]') || root.querySelector('[data-testid="v4-timeline-scroll"]');
@@ -1841,7 +1919,10 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
             }
             // v70：祖先链上溯（含滚动容器本身）——每层收 padding-bottom，以及该层在
             // 路径节点之后的无正文空壳兄弟（测高残留/占位条）；SECTION（真消息）与
-            // zcode 自家节点、有正文的节点绝不动
+            // zcode 自家节点、有正文的节点绝不动。
+            // v72：空壳判断 textContent → innerText——textContent 不看渲染，display:none
+            // 的 dock 子树文字也算"有正文"，包着隐形 dock 的占位壳永远漏判；innerText
+            // 按渲染取文，隐形即空壳
             var child = lastSec;
             var anc = lastSec.parentElement;
             while (anc && phantom > 12) {
@@ -1856,7 +1937,10 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
                 var ke = kids[k];
                 if (ke === child) { after = true; continue; }
                 if (!after || ke.tagName === 'SECTION' || (ke.id && ke.id.indexOf('zcode-') === 0)) { continue; }
-                if ((ke.textContent || '').trim()) { continue; }   // 有正文=真内容，绝不动
+                if (dock && ke.contains && ke.contains(dock)) { continue; }   // v72：dock 壳交给外底带逻辑
+                var kt = '';
+                try { kt = (ke.innerText === undefined ? ke.textContent : ke.innerText) || ''; } catch (eI) { kt = ke.textContent || ''; }
+                if ((kt || '').replace(/\s+/g, '').length) { continue; }   // 渲染出文字=真内容，绝不动
                 var kh = ke.offsetHeight;
                 if (kh > 4 && kh <= phantom + 12) {
                   tailFixed.push({ el: ke, prop: 'display', val: ke.style.display });
@@ -1868,6 +1952,66 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
               child = anc;
               anc = anc.parentElement;
             }
+          }
+        }
+        // ---------- 容器外底带（v72） ----------
+        // 实机"收纳态底部仍有 ~70px 空带"的另一半：phantom 只量得到 tl 内部，tl 视口
+        // 底缘到屏底的占位（dock 槽位圈的壳）在容器外。收纳态（float-on 且未唤出，
+        // 图标/胶囊全 fixed 不占流）直接量 outerGap = 屏底 − tl 底缘，>12px 才动外层，
+        // 从 tl 父层起最多上探三层：
+        // · 每层收 padding-bottom；
+        // · tl 之后的无壳兄弟（innerText 空壳 + 高度闸门 ≤ gap+12）display:none；
+        // · 包着 dock 的壳只收自身 padding-bottom / min-height，绝不 display:none
+        //   ——popup-mode 靠 dock 复活，祖先 display:none 连 fixed 弹窗一起埋掉。
+        // 一层没有收出任何变化就停（再往上是页面主干，不该由底部清理去动）。
+        // float-on 关闭（空会话原生输入框在底部）时外底带就是 dock 本尊，绝不能碰。
+        if (doc.documentElement.classList.contains('zcode-float-on')) {
+          var oChild = tl;
+          var oAnc = tl.parentElement;
+          for (var oLvl = 0; oAnc && oLvl < 3; oLvl++) {
+            var oGap = window.innerHeight - tl.getBoundingClientRect().bottom;
+            if (oGap <= 12 || oGap > 240) { break; }
+            var oMoved = false;
+            var oPb = parseFloat(getComputedStyle(oAnc).paddingBottom) || 0;
+            if (oPb > 4 && oPb <= oGap + 12) {
+              tailFixed.push({ el: oAnc, prop: 'paddingBottom', val: oAnc.style.paddingBottom });
+              oAnc.style.paddingBottom = '0px';
+              oMoved = true; changed = true; uiLog('tail-pad-out');
+            }
+            var oKids = oAnc.children, oAfter = false;
+            for (var ok = 0; ok < oKids.length; ok++) {
+              var oe = oKids[ok];
+              if (oe === oChild) { oAfter = true; continue; }
+              if (!oAfter || oe.tagName === 'SECTION' || (oe.id && oe.id.indexOf('zcode-') === 0)) { continue; }
+              var oh = oe.offsetHeight;
+              if (oh <= 4 || oh > oGap + 12) { continue; }
+              if (dock && oe.contains && oe.contains(dock)) {
+                // dock 壳：只收自身的 padding-bottom / min-height（高度来源是自身
+                // padding/min-height 时会随之塌掉），display 碰都不碰
+                var opb = parseFloat(getComputedStyle(oe).paddingBottom) || 0;
+                if (opb > 4 && opb <= oGap + 12) {
+                  tailFixed.push({ el: oe, prop: 'paddingBottom', val: oe.style.paddingBottom });
+                  oe.style.paddingBottom = '0px';
+                  oMoved = true; changed = true; uiLog('tail-dockpad-out');
+                }
+                var omh = parseFloat(getComputedStyle(oe).minHeight) || 0;
+                if (omh > 4 && omh <= oGap + 12) {
+                  tailFixed.push({ el: oe, prop: 'minHeight', val: oe.style.minHeight });
+                  oe.style.minHeight = '0px';
+                  oMoved = true; changed = true; uiLog('tail-dockmin-out');
+                }
+                continue;
+              }
+              var ot = '';
+              try { ot = (oe.innerText === undefined ? oe.textContent : oe.innerText) || ''; } catch (eO) { ot = oe.textContent || ''; }
+              if ((ot || '').replace(/\s+/g, '').length) { continue; }   // 渲染出文字=真内容，绝不动
+              tailFixed.push({ el: oe, prop: 'display', val: oe.style.display });
+              oe.style.display = 'none';
+              oMoved = true; changed = true; uiLog('tail-el-out');
+            }
+            if (!oMoved) { break; }
+            oChild = oAnc;
+            oAnc = oAnc.parentElement;
           }
         }
       } catch (eA) {}
@@ -2022,7 +2166,13 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
       }
       ensureIcon(dock);   // v66：收纳图标同步（悬浮层，跟随 float-on/open/popup 状态显隐 + 手势豁免上报）
       applySafeB();   // v70：底部安全区 → --zc-safe-b（图标/悬浮/全屏 bottom 引用）
+      // v72：悬浮/弹窗让位垫（见 needOverlayPad 注释）——收纳态先撤垫再测尾部，
+      // 悬浮/弹窗态先尾部还原、后落垫
+      var padNeed = needOverlayPad(dock);
+""" +
+"""      if (padNeed === 0) { clearOverlayPad(); }
       syncTailBlank(dock);   // v68/v69：收纳态底部残留逐一测量回收，末条消息贴屏底
+      if (padNeed > 0) { setOverlayPad(padNeed); }
       // v66：dock 流内高度变化（收纳 0 ⇄ 唤出悬浮高 ⇄ 常驻 121）时通知虚拟列表重算，
       // 让位跟着新高度走，旧高度不会残留成底部空带。v71：动画进行中跳过——动画中的
       // 中间高度没有意义，落定后的 syncComposer 会补上这次测量与派发
@@ -2183,8 +2333,7 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
       }
       if (composerOpen || dock.classList.contains('zcode-popup-mode') ||
           dock.classList.contains('zcode-popup-present')) {
-""" +
-"""        // 唤出态/弹窗态藏图标：与输入框的切换由容器变换负责，这里瞬时切换
+        // 唤出态/弹窗态藏图标：与输入框的切换由容器变换负责，这里瞬时切换
         if (ic) { ic.style.display = 'none'; }
         updateGestureExclude();
         return;
@@ -2230,6 +2379,11 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
       pendingOpen = false;
       if (composerOpen) { return; }
       composerOpen = true;
+      // v72：垫上让位垫之前记住是否在底部——垫上后把内容顶到垫上方，
+      // 否则开输入框的瞬间最后一条消息就沉到胶囊底下
+      var tlKeep = overlayTl();
+      var wasBottom = false;
+      if (tlKeep) { try { wasBottom = tlKeep.scrollHeight - tlKeep.scrollTop - tlKeep.clientHeight < 160; } catch (eK) {} }
       minUpDist = 0;
       persistComposerState('open');
       dock.classList.add('zcode-composer-float');
@@ -2241,6 +2395,7 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
       var ic0 = doc.getElementById('zcode-composer-icon');
       var from = (ic0 && ic0.style.display !== 'none' && ic0.offsetWidth > 0) ? rectOf(ic0) : iconHomeRect();
       syncComposer();
+      if (wasBottom && tlKeep) { try { tlKeep.scrollTop = tlKeep.scrollHeight; } catch (eK2) {} }
       var pill = dock.querySelector('.rounded-2xl');
       if (morphable(pill, dock)) { morphReveal(dock, pill, from); }
       // 聚焦输入框：键盘跟随弹出；自动恢复态传 focus=false，不弹键盘
@@ -2800,15 +2955,41 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
             window.isStatusBarContrastEnforced = false
             window.isNavigationBarContrastEnforced = false
         }
-        ViewCompat.setOnApplyWindowInsetsListener(findViewById(android.R.id.content)) { v, insets ->
+        // v72（实机"输入法完全遮住输入框"）：setDecorFitsSystemWindows(false) 之后
+        // manifest 的 adjustResize 不再自动缩放窗口（v70 注释的假设是错的）——键盘期
+        // 由本监听把 IME inset 垫进 content 底部，WebView 随之缩到键盘上方；键盘收起
+        // 回到 0（底部安全区仍走 safeB 桥）。键盘期 safeB 归零：WebView 底缘已落在
+        // 键盘顶上，没有再要避让的系统条，图标/胶囊不用二次抬升。
+        val contentView = findViewById<View>(android.R.id.content)
+        ViewCompat.setOnApplyWindowInsetsListener(contentView) { v, insets ->
             val bars = insets.getInsets(
                 WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout(),
             )
-            // 底部垫高刻意为 0——键盘仍走 manifest 的 adjustResize（窗口级缩放，与本监听不冲突）
-            v.setPadding(bars.left, bars.top, bars.right, 0)
-            reportSafeB(bars.bottom)
+            val ime = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
+            v.setPadding(bars.left, bars.top, bars.right, ime)
+            reportSafeB(if (ime > 0) 0 else bars.bottom)
             WindowInsetsCompat.CONSUMED
         }
+        // 键盘起落动画期同步垫高：不加这段 padding 要等动画结束的最终分发才跳变，
+        // 页面会先被键盘盖一瞬再弹起
+        ViewCompat.setWindowInsetsAnimationCallback(
+            contentView,
+            object : WindowInsetsAnimationCompat.Callback(
+                WindowInsetsAnimationCompat.DISPATCH_MODE_CONTINUE_ON_SUBTREE,
+            ) {
+                override fun onProgress(
+                    insets: WindowInsetsCompat,
+                    running: MutableList<WindowInsetsAnimationCompat>,
+                ): WindowInsetsCompat {
+                    val imeNow = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
+                    contentView.setPadding(
+                        contentView.paddingLeft, contentView.paddingTop,
+                        contentView.paddingRight, imeNow,
+                    )
+                    return insets
+                }
+            },
+        )
         // debug 构建允许 WebView 远程调试：电脑 Chrome 打开 chrome://inspect 可直接
         // F12 式检查注入页面 DOM（定位弹窗/布局问题必备；release 构建自动关闭）
         WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG)

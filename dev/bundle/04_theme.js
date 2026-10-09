@@ -181,7 +181,7 @@
     function diagInfo(){
       var de = doc.documentElement;
       var out = {
-        bundleVer: 48,
+        bundleVer: 49,
         // v70：实机"动画不生效/交互生硬"排查项——系统减弱动效（REDUCED）会关掉全部注入
         // 动画；safeB 是原生边到边上报的底部安全区（0 = 旧壳/桌面/未上报）
         animOn: ANIM_ON,
@@ -287,6 +287,35 @@
         phantom: tailFixPhantom,
         nudgeAt: tailNudgeAt ? new Date(tailNudgeAt).toTimeString().slice(0, 8) : ''
       };
+      // v72：底部空带取证——实机"收纳态底部仍有空白带"定位用。tlBottom < innerH
+      // 即时间线容器没铺到屏底（空带在容器外，dock 槽位圈）；probe 逐行报底带里
+      // 实际压着什么元素（tag>链路，null=什么都没有）；padPx=悬浮让位垫当前值
+      try {
+        var bbTl = root.querySelector('[data-testid="v4-timeline"]') || root.querySelector('[data-testid="v4-timeline-scroll"]');
+        var bbDk = getDock();
+        var bbProbe = [];
+        var bbIh = window.innerHeight;
+        for (var bbDy = 8; bbDy <= 96; bbDy += 22) {
+          var bbEl = null;
+          try { bbEl = doc.elementFromPoint(Math.round(window.innerWidth / 2), bbIh - bbDy); } catch (eP0) {}
+          var bbChain = [];
+          for (var bbN = bbEl; bbN && bbN.nodeType === 1 && bbChain.length < 4; bbN = bbN.parentElement) {
+            var bbTid = bbN.getAttribute ? (bbN.getAttribute('data-testid') || '') : '';
+            bbChain.push(bbN.tagName + (bbTid ? '[' + bbTid + ']' : '') + (bbN.id ? '#' + bbN.id : ''));
+          }
+          bbProbe.push((bbIh - bbDy) + ':' + (bbChain.join('>') || 'null'));
+        }
+        out.bottomBand = {
+          tlBottom: bbTl ? Math.round(bbTl.getBoundingClientRect().bottom) : -1,
+          innerH: bbIh,
+          tlScrollH: bbTl ? bbTl.scrollHeight : -1,
+          tlClientH: bbTl ? bbTl.clientHeight : -1,
+          dockH: bbDk ? Math.round(bbDk.offsetHeight) : -1,
+          dockBottom: bbDk ? Math.round(bbDk.getBoundingClientRect().bottom) : -1,
+          padPx: (typeof overlayPadPx === 'number' ? overlayPadPx : -1),
+          probe: bbProbe
+        };
+      } catch (eBB) { out.bottomBand = 'err'; }
       // composerProbe：诊断当下重新查一次容器，确认选择器本身是否命中（与 dock=0 区分"从未找到"vs"找到后又丢了"）
       try {
         var liveDock = root.querySelector(COMPOSER_SEL);
