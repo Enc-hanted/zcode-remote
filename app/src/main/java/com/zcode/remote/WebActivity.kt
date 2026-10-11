@@ -3972,7 +3972,7 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
                         duration = 2000L
                         addUpdateListener { a -> agentStrip.alpha = a.animatedValue as Float }
                         addListener(object : AnimatorListenerAdapter() {
-                            override fun onAnimationEnd(animation: Animator?) {
+                            override fun onAnimationEnd(animation: Animator) {
                                 if (agentState == "done") agentStrip.visibility = View.GONE
                             }
                         })
