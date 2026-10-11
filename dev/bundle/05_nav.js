@@ -127,7 +127,6 @@
       navEl.addEventListener('touchmove', onNavMove, {passive:true});
       navEl.addEventListener('touchend', onNavEnd, {passive:true});
       navEl.addEventListener('click', navAutoClose, true);
-      vibrate();
       // v69：原生轨道可见性校验——display 解锁后仍无布局宽度（display:none 之外的藏法/结构变化）
       // 就地切自建面板，用户永远能看到导航，而不是对着空气右滑。
       // 双采样：260ms 与 480ms 各测一次，都为零宽才判定（单次测量可能撞上渲染中间态）
@@ -393,7 +392,6 @@
       if (turns.length) {
         uiLog('nav-panel-' + turns.length);
         buildPanel(turns);
-        vibrate();
         hint('已唤出问题导航（点外部收起）');
         return;
       }

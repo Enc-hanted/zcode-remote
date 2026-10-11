@@ -83,7 +83,6 @@
         iconTrack.done = true; iconTrack.dir = 'right';
         e.preventDefault();
         uiLog('icon-swiperight');
-        vibrate();
         iconRelease(e.currentTarget);   // 右滑开导航：图标回弹归位
         if (!navOn) { hint('对话问题导航已关闭'); }
         else { toggleNavigator(); }
@@ -163,14 +162,12 @@
         dockTrack.done = true;
         e.preventDefault();
         uiLog('composer-swipedown-min');
-        vibrate();
         hideComposer();
         hint('已收纳，点左下角图标唤出');
       } else if (dy < -44 && Math.abs(dx) < 40) {
         dockTrack.done = true;
         e.preventDefault();
         uiLog('composer-swipeup-full');
-        vibrate();
         if (!composerFull) { toggleFullComposer(); }
       }
     }
@@ -239,7 +236,9 @@
     var sendObs = null;
     try {
       sendObs = new MutationObserver(function(muts){
-        if (!sendMinimize || !composerOpen || !sendHadText) { return; }
+        // P0①：入口只看 sendHadText——发送确认震(sent)不依赖归位开关/浮动输入模式；
+        // 归位的两个开关门控下移到命中发送签名之后，原行为不变
+        if (!sendHadText) { return; }
         if (Date.now() - sendHadTextAt > 6000) { sendHadText = false; return; }
         for (var i = 0; i < muts.length; i++) {
           if (muts[i].type !== 'childList') { continue; }
@@ -258,6 +257,8 @@
             var ta = dk ? dk.querySelector('[data-testid^="v4-composer-input"], textarea') : null;
             if (ta && composerTextOf(ta).trim()) { continue; }   // 有字=不是发送
             sendHadText = false;
+            zcHaptic('sent');   // P0①：发送成功确认震（双证据命中，白名单内）
+            if (!sendMinimize || !composerOpen) { return; }   // 归位仍按原门控
             uiLog('send-minimize');
             setTimeout(function(){
               try {
@@ -379,6 +380,18 @@
       try { doc.documentElement.classList.toggle('zc-amoled', amoledBlack); } catch (e) {}
     }
     applyAmoled();
+    // ---------- P0①：触感反馈（白名单状态确认震，经原生桥） ----------
+    // 只做确认不做装饰：sent=发送成功（新用户行+输入框清空双证据）、confirm=等待确认
+    // 弹窗出现（调用点自带 2s 防抖）。旧 Web 震动 API 的手势微震已整套删除（本就哑炮）。
+    // 缺件健全：桥缺失/旧壳/mock 页一律静默；hapticOn 关闭不发（原生侧还会再查一次，双保险）。
+    function zcHaptic(kind){
+      try {
+        var s = window.__zcSettings;
+        if (s && s.hapticOn === false) { return; }
+        var br = bridge();
+        if (br && br.haptic) { br.haptic(kind); }
+      } catch (e) {}
+    }
     // v71：虚拟列表换窗时可能短暂卸载全部 v4-row；不能把一次空 query 当成"新空会话"。
     // 首次见到消息后，连续两轮（约 2 秒）都无行才允许摘 zcode-float-on，避免 dock
     // 在 0 高/原生高度之间来回跳，进而触发 resize→虚拟列表重算→再次卸载的反馈回路。
@@ -495,10 +508,10 @@
         dock.classList.add('zcode-popup-present');   // 弹窗存在标记：隐藏 expand 按钮（悬浮态也生效）
         if (!composerOpen && !dock.classList.contains('zcode-popup-mode')) {
           dock.classList.add('zcode-popup-mode');
-          // 弹窗出现时轻提示（防抖，避免流式渲染期间反复震）
+          // 弹窗出现时轻提示（防抖，避免流式渲染期间反复震/弹）
           if (Date.now() - lastPopupSeen > 2000) {
             lastPopupSeen = Date.now();
-            vibrate();
+            zcHaptic('confirm');
             hint('有请求需要确认');
           }
         }
@@ -1428,7 +1441,6 @@
       swipes = [];
       if (now - lastTrigger < COOLDOWN) { return; }
       lastTrigger = now;
-      vibrate();
       uiLog('combo-swipe-diag');
       showDiagCard();
     }

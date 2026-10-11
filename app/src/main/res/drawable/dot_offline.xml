@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 小部件状态色点（灰=unknown/缺件/无会话）：宁灰勿错，不伪装实时 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <solid android:color="@color/status_offline" />
+</shape>

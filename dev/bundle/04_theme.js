@@ -181,7 +181,7 @@
     function diagInfo(){
       var de = doc.documentElement;
       var out = {
-        bundleVer: 58,
+        bundleVer: 60,
         // v70：实机"动画不生效/交互生硬"排查项——系统减弱动效（REDUCED）会关掉全部注入
         // 动画；safeB 是原生边到边上报的底部安全区（0 = 旧壳/桌面/未上报）
         animOn: ANIM_ON,
@@ -354,7 +354,12 @@
           sendMin: sendMinimize ? 1 : 0,
           amoled: amoledBlack ? 1 : 0,
           skShown: (typeof skShown === 'number' ? skShown : 0),
-          readLine: readLineEl ? 1 : 0
+          readLine: readLineEl ? 1 : 0,
+          // 一期状态感知轴（诊断卡开关行）：09_agent 状态机 / 原生状态条 / 错误通知（预留）。
+          // errNotify 键先落地无消费——错误行选择器未经实机取证（evolution-plan §4.5-6）
+          agentState: ((window.__zcSettings || {}).agentStateOn !== false) ? 1 : 0,
+          statusStrip: ((window.__zcSettings || {}).statusStripOn !== false) ? 1 : 0,
+          errNotify: ((window.__zcSettings || {}).errNotifyOn !== false) ? 1 : 0
         };
       } catch (eFT) { out.feats = 'err'; }
       out.bars = 'top=' + (lastTop ? lastTop.r + ',' + lastTop.g + ',' + lastTop.b : 'null') +

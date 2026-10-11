@@ -1,5 +1,8 @@
 package com.zcode.remote
 
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
+import android.animation.ValueAnimator
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -12,6 +15,7 @@ import android.graphics.Rect
 import android.net.http.SslError
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.util.Log
 import android.view.View
 import android.webkit.CookieManager
@@ -186,6 +190,9 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
         '--zc-stroke:rgba(255,255,255,0.14);--zc-stroke-faint:rgba(255,255,255,0.08);--zc-stroke-strong:rgba(255,255,255,0.20);' +
         '--zc-text:#F2F2F2;--zc-text-2:#FAFAFA;--zc-text-dim:#CFCFCF;--zc-text-3:#909090;' +
         '--zc-hover:rgba(255,255,255,0.08);--zc-hover-strong:rgba(255,255,255,0.12);--zc-outline:rgba(255,255,255,0.85);' +
+        // 一期状态感知轴：信号灯 token，与原生 @color/status_live/status_warn 严格同源同值
+        //（深色 = values-night/colors.xml，浅色覆盖见下）——不另设色，换主题=换表
+        '--zc-live:#00E676;--zc-warn:#F0B232;' +
         '--zc-radius:12px;--zc-radius-lg:16px;--zc-radius-xl:22px;}' +
         // 浅色主题：页面检测为浅色时 JS 给 <html> 挂 zcode-ui-light，整套 token 换白底黑字（04_theme.js reportTheme 驱动）
         'html.zcode-ui-light{' +
@@ -194,6 +201,7 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
         '--zc-stroke:rgba(10,18,34,0.12);--zc-stroke-faint:rgba(10,18,34,0.06);--zc-stroke-strong:rgba(10,18,34,0.18);' +
         '--zc-text:#1B2230;--zc-text-2:#0F1522;--zc-text-dim:#3A4356;--zc-text-3:#8A93A6;' +
         '--zc-hover:rgba(10,18,34,0.06);--zc-hover-strong:rgba(10,18,34,0.10);--zc-outline:rgba(20,35,60,0.80);' +
+        '--zc-live:#00875A;--zc-warn:#B26A00;' +
         'color-scheme:light;}' +
         '@keyframes zcodeFadeUp{from{opacity:0;transform:translateX(-50%) translateY(16px)}to{opacity:1;transform:translateX(-50%)}}' +
         '@keyframes zcodeFadeUpNoX{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}' +
@@ -204,6 +212,9 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
         '@keyframes zcodeFadePanel{from{opacity:0;transform:translateX(-50%) translateY(10px)}to{opacity:1;transform:translateX(-50%)}}' +
         '@keyframes zcodeFadePanelOut{from{opacity:1;transform:translateX(-50%) translateY(0)}to{opacity:0;transform:translateX(-50%) translateY(10px)}}' +
         '@keyframes zcodeFadeHint{from{opacity:0;transform:translateX(-50%) translateY(8px) scale(0.96)}to{opacity:1;transform:translateX(-50%)}}' +
+        // 一期 09_agent 悬浮光点呼吸（1.2s——状态灯呼吸是全 App 唯一 >300ms 动画例外，
+        // 与原生状态条 ValueAnimator 同参数；reduced-motion 时 09 不引用本动画改半透明常亮）
+        '@keyframes zcodeDotBreath{0%,100%{opacity:1}50%{opacity:0.25}}' +
         // 浮动输入（v65 图标化）：有消息未唤出时不再把整个 dock display:none——
         // 新版(3.14.4)页面给 composer 让位的 padding 挂在 timeline 内容列等节点上，
         // dock 一消失让位空间就失去锚点，底部留大块空白（真机实测+线上 bundle 取证）。
@@ -461,9 +472,6 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
           h.parentNode.removeChild(h);
         }
       }, 1600);
-    }
-    function vibrate(){
-      try { if (navigator.vibrate) { navigator.vibrate(15); } } catch (e) {}
     }
     function styleRoot(){
       return isShadow ? root : (doc.head || doc.documentElement);
@@ -730,7 +738,7 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
     function diagInfo(){
       var de = doc.documentElement;
       var out = {
-        bundleVer: 58,
+        bundleVer: 60,
         // v70：实机"动画不生效/交互生硬"排查项——系统减弱动效（REDUCED）会关掉全部注入
         // 动画；safeB 是原生边到边上报的底部安全区（0 = 旧壳/桌面/未上报）
         animOn: ANIM_ON,
@@ -903,7 +911,12 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
           sendMin: sendMinimize ? 1 : 0,
           amoled: amoledBlack ? 1 : 0,
           skShown: (typeof skShown === 'number' ? skShown : 0),
-          readLine: readLineEl ? 1 : 0
+          readLine: readLineEl ? 1 : 0,
+          // 一期状态感知轴（诊断卡开关行）：09_agent 状态机 / 原生状态条 / 错误通知（预留）。
+          // errNotify 键先落地无消费——错误行选择器未经实机取证（evolution-plan §4.5-6）
+          agentState: ((window.__zcSettings || {}).agentStateOn !== false) ? 1 : 0,
+          statusStrip: ((window.__zcSettings || {}).statusStripOn !== false) ? 1 : 0,
+          errNotify: ((window.__zcSettings || {}).errNotifyOn !== false) ? 1 : 0
         };
       } catch (eFT) { out.feats = 'err'; }
       out.bars = 'top=' + (lastTop ? lastTop.r + ',' + lastTop.g + ',' + lastTop.b : 'null') +
@@ -1006,7 +1019,8 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
     }
     function showDiagCard(){
       var info = diagInfo();
-      var text = JSON.stringify(info, null, 1);
+""" +
+"""      var text = JSON.stringify(info, null, 1);
       var card = doc.createElement('div');
       card.id = 'zcode-diag-card';
       card.style.cssText = 'position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:99999;' +
@@ -1020,8 +1034,7 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
       title.style.cssText = 'font-size:13px;font-weight:600;color:var(--zc-text-2);margin-bottom:8px;';
       var pre = doc.createElement('div');
       pre.style.cssText = 'white-space:pre-wrap;word-break:break-all;';
-""" +
-"""      pre.textContent = text;
+      pre.textContent = text;
       var copy = doc.createElement('div');
       copy.textContent = '复制诊断';
       copy.style.cssText = 'margin-top:10px;text-align:center;color:var(--zc-text-2);background:rgba(255,255,255,0.10);' +
@@ -1184,7 +1197,6 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
       navEl.addEventListener('touchmove', onNavMove, {passive:true});
       navEl.addEventListener('touchend', onNavEnd, {passive:true});
       navEl.addEventListener('click', navAutoClose, true);
-      vibrate();
       // v69：原生轨道可见性校验——display 解锁后仍无布局宽度（display:none 之外的藏法/结构变化）
       // 就地切自建面板，用户永远能看到导航，而不是对着空气右滑。
       // 双采样：260ms 与 480ms 各测一次，都为零宽才判定（单次测量可能撞上渲染中间态）
@@ -1450,7 +1462,6 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
       if (turns.length) {
         uiLog('nav-panel-' + turns.length);
         buildPanel(turns);
-        vibrate();
         hint('已唤出问题导航（点外部收起）');
         return;
       }
@@ -1633,7 +1644,6 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
         iconTrack.done = true; iconTrack.dir = 'right';
         e.preventDefault();
         uiLog('icon-swiperight');
-        vibrate();
         iconRelease(e.currentTarget);   // 右滑开导航：图标回弹归位
         if (!navOn) { hint('对话问题导航已关闭'); }
         else { toggleNavigator(); }
@@ -1713,14 +1723,12 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
         dockTrack.done = true;
         e.preventDefault();
         uiLog('composer-swipedown-min');
-        vibrate();
         hideComposer();
         hint('已收纳，点左下角图标唤出');
       } else if (dy < -44 && Math.abs(dx) < 40) {
         dockTrack.done = true;
         e.preventDefault();
         uiLog('composer-swipeup-full');
-        vibrate();
         if (!composerFull) { toggleFullComposer(); }
       }
     }
@@ -1789,7 +1797,9 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
     var sendObs = null;
     try {
       sendObs = new MutationObserver(function(muts){
-        if (!sendMinimize || !composerOpen || !sendHadText) { return; }
+        // P0①：入口只看 sendHadText——发送确认震(sent)不依赖归位开关/浮动输入模式；
+        // 归位的两个开关门控下移到命中发送签名之后，原行为不变
+        if (!sendHadText) { return; }
         if (Date.now() - sendHadTextAt > 6000) { sendHadText = false; return; }
         for (var i = 0; i < muts.length; i++) {
           if (muts[i].type !== 'childList') { continue; }
@@ -1808,6 +1818,8 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
             var ta = dk ? dk.querySelector('[data-testid^="v4-composer-input"], textarea') : null;
             if (ta && composerTextOf(ta).trim()) { continue; }   // 有字=不是发送
             sendHadText = false;
+            zcHaptic('sent');   // P0①：发送成功确认震（双证据命中，白名单内）
+            if (!sendMinimize || !composerOpen) { return; }   // 归位仍按原门控
             uiLog('send-minimize');
             setTimeout(function(){
               try {
@@ -1929,6 +1941,18 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
       try { doc.documentElement.classList.toggle('zc-amoled', amoledBlack); } catch (e) {}
     }
     applyAmoled();
+    // ---------- P0①：触感反馈（白名单状态确认震，经原生桥） ----------
+    // 只做确认不做装饰：sent=发送成功（新用户行+输入框清空双证据）、confirm=等待确认
+    // 弹窗出现（调用点自带 2s 防抖）。旧 Web 震动 API 的手势微震已整套删除（本就哑炮）。
+    // 缺件健全：桥缺失/旧壳/mock 页一律静默；hapticOn 关闭不发（原生侧还会再查一次，双保险）。
+    function zcHaptic(kind){
+      try {
+        var s = window.__zcSettings;
+        if (s && s.hapticOn === false) { return; }
+        var br = bridge();
+        if (br && br.haptic) { br.haptic(kind); }
+      } catch (e) {}
+    }
     // v71：虚拟列表换窗时可能短暂卸载全部 v4-row；不能把一次空 query 当成"新空会话"。
     // 首次见到消息后，连续两轮（约 2 秒）都无行才允许摘 zcode-float-on，避免 dock
     // 在 0 高/原生高度之间来回跳，进而触发 resize→虚拟列表重算→再次卸载的反馈回路。
@@ -2045,10 +2069,10 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
         dock.classList.add('zcode-popup-present');   // 弹窗存在标记：隐藏 expand 按钮（悬浮态也生效）
         if (!composerOpen && !dock.classList.contains('zcode-popup-mode')) {
           dock.classList.add('zcode-popup-mode');
-          // 弹窗出现时轻提示（防抖，避免流式渲染期间反复震）
+          // 弹窗出现时轻提示（防抖，避免流式渲染期间反复震/弹）
           if (Date.now() - lastPopupSeen > 2000) {
             lastPopupSeen = Date.now();
-            vibrate();
+            zcHaptic('confirm');
             hint('有请求需要确认');
           }
         }
@@ -2123,7 +2147,8 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
       if (el.id && el.id.indexOf('zcode-') === 0) { return false; }
       try {
         // 我们自己的注入层不算（诊断卡/导航/遮罩）；dock 内弹窗走 popup-mode 复活，也不算
-        if (el.closest('#zcode-mask, #zcode-fallback-nav, #zcode-nav-hint, #zcode-nav-preview, #zcode-diag-card')) { return false; }
+""" +
+"""        if (el.closest('#zcode-mask, #zcode-fallback-nav, #zcode-nav-hint, #zcode-nav-preview, #zcode-diag-card')) { return false; }
         if (el.closest('[data-v4-composer-dock="true"]')) { return false; }
         var cs = getComputedStyle(el);
         if (cs.position !== 'fixed' && cs.position !== 'absolute') { return false; }
@@ -2160,8 +2185,7 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
         }
       } catch (e) {}
       var html = doc.documentElement;
-""" +
-"""      if (!html) { return; }   // shadow root 没有 documentElement
+      if (!html) { return; }   // shadow root 没有 documentElement
       if (found) { html.classList.add('zcode-body-popup'); }
       else { html.classList.remove('zcode-body-popup'); }
     }
@@ -2979,7 +3003,6 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
       swipes = [];
       if (now - lastTrigger < COOLDOWN) { return; }
       lastTrigger = now;
-      vibrate();
       uiLog('combo-swipe-diag');
       showDiagCard();
     }
@@ -3079,6 +3102,16 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
       // v81：③键盘跟随已删除，kbFollowExp 键退役（旧存档多出的键无害）
       if (o.sendMinimize !== undefined) { sendMinimize = (o.sendMinimize !== false); ZSET.sendMinimize = sendMinimize; }
       if (o.amoledBlack !== undefined) { amoledBlack = (o.amoledBlack === true); ZSET.amoledBlack = amoledBlack; applyAmoled(); }
+      // P0①：触感开关（zcHaptic 每次实时读 __zcSettings.hapticOn，写回即热更生效）
+      if (o.hapticOn !== undefined) { ZSET.hapticOn = (o.hapticOn !== false); }
+      // 一期状态感知轴三键（agentStateOn/statusStripOn/errNotifyOn，写回 ZSET 即热更）：
+      // agentStateOn 由 09_agent 每拍自读（关 = 空拍静默 + 光点移除，不跨闭包启停）；
+      // statusStripOn 的呈现消费在原生侧状态条（__zcSettings 注入序列化带同值）；
+      // errNotifyOn 键先落地、本期无消费方——错误行选择器未经实机取证（evolution-plan
+      // §4.5-6），取证通过接错误态通知时才消费
+      if (o.agentStateOn !== undefined) { ZSET.agentStateOn = (o.agentStateOn !== false); }
+      if (o.statusStripOn !== undefined) { ZSET.statusStripOn = (o.statusStripOn !== false); }
+      if (o.errNotifyOn !== undefined) { ZSET.errNotifyOn = (o.errNotifyOn !== false); }
       // 滚动条热切（原生已注入原版，这里只在变化时加覆盖样式）
       if (o.scrollbar !== undefined) { setScrollbar(o.scrollbar); }
     }
@@ -3138,7 +3171,8 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
     var settledRows = {};   // 已结束的行（基线/历史/出过反馈）→ runActive 跳过，避免每轮重复 querySelector
     function runActive(){
       if (root.querySelector('[data-testid^="v4-stop"], [data-testid^="chat-loading"]')) { return true; }
-      var rows = root.querySelectorAll('[data-testid^="v4-row"]');
+""" +
+"""      var rows = root.querySelectorAll('[data-testid^="v4-row"]');
       for (var i = 0; i < rows.length; i++) {
         var r = rows[i];
         var rid = rowIdOf(r);
@@ -3197,8 +3231,7 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
       var rid = rowIdOf(row);
       if (!rid || watchers[rid] || doneRows[rid]) { return; }
       traceAdd('watch', rid, '');
-""" +
-"""      var w = { row: row, lastLen: -1, stable: 0, timer: null };
+      var w = { row: row, lastLen: -1, stable: 0, timer: null };
       watchers[rid] = w;
       function tick(){
         if (doneRows[rid]) { delete watchers[rid]; return; }
@@ -3342,6 +3375,8 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
     if (replyActive) { bootstrapReply(); }
   };
 
+  // （拼接结构：最外层包装函数由 01_core.js 开、09_agent.js 末尾闭——本文件不再收尾，
+  //   09_agent 的顶层执行段接在本文件之后、同处包装函数顶层作用域）
   // ---------- 顶层执行 ----------
   // BODY 包 try/catch：注入失败不静默（错误进 __zcodeErrors，诊断卡可查）
   try {
@@ -3419,6 +3454,182 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
       for (var j = 0; j < all4.length; j++) { if (all4[j].shadowRoot) { queueShadow(all4[j].shadowRoot); } }
     } catch (e) {}
   }, 30000);
+  // ---------- 一期「状态感知轴」：09_agent 只读状态机（→ br.onAgentState + 悬浮光点） ----------
+  // 独立 1s 轻轮询，不进 syncComposer 轮询中心；__zcSettings.agentStateOn !== false 门控，
+  // 注入时关闭则整个 IIFE 不启动（缺件健全）。热更关闭（applySettings 写回 ZSET，见 07）
+  // 后每拍自读该键：不再判定/上报/显示光点——轮询保留一个空拍的布尔检查，换取 07→09 零
+  // 跨闭包调用（同 zcHaptic 每拍读 hapticOn 的松耦合做法）。
+  // 判定自建（评审 4：runActive/checkRunEnd 是 07 的闭包函数，不可引），选择器沿用已实机
+  // 验证的 v4-* 族，出处（dev/bundle 内实际行号）：
+  //   generating : [data-testid^="v4-stop"], [data-testid^="chat-loading"]（07_settings.js:158-159，runActive 首行）
+  //   thinking   : 末条 assistant 行含 [data-testid^="chat-reasoning"]（07_settings.js:208，isAnswerRow 内；函数头 205）
+  //   done       : generating/thinking → 非活跃的下降沿；行完成证据 = 反馈按钮
+  //                v4-feedback-(like|dislike)-<rid>（07_settings.js:165，行外按 rid 关联）
+  //   waitConfirm: dock 内确认弹窗命中（选择器复制自 06_composer.js:456-467 的 POPUP_HINT_SEL
+  //                常量——字符串可复制，闭包不可引；dock 选择器复制自 :370 COMPOSER_SEL）
+  //   error      : 本期不产出——错误行选择器未经实机取证（evolution-plan §7-#1），宁漏报不误报；
+  //                取证通过后在此补 error 分支（错误态判定 + onAgentState('error', snippet)）
+  //   idle/unknown：有消息行=空闲，无行=unknown（页面未就绪/选择器漂移 → 停 unknown 不误报）
+  // 只报变化沿；桥判空照 07_settings.js:134-141 notify() 先例，try-catch 静默——老 APK 无
+  // onAgentState 桥方法时照常跑光点、不上报。
+  // 局限（如实注明）：本段在顶层文档执行、用 document 查询，不被 08 的 BODY 广播带进
+  // shadow DOM/iframe——若页面把消息行放进 shadow root，本状态机退化为 unknown（漏报不误报，
+  // 与 error 同等保守取向）；实机核对若发现该场景，再评估并入 BODY 广播。
+  // 光点自绘而非挂 #zcode-composer-icon（06_composer.js:1282-1297 ensureIcon 创建）：waitConfirm
+  // 恰是最需要被看见的状态，而 ensureIcon 在弹窗态/唤出态会把 icon display:none（06_composer.js:1275-1280），
+  // 挂在 icon 里的光点在该态不可见；自绘 fixed 光点（pointer-events:none，不挡任何点击）不依赖
+  // icon 生命周期。与原生状态条同开时以原生条为唯一真源（同源同色，光点只是页面内就近呈现）。
+  (function () {
+    var ZS0 = window.__zcSettings;
+    if (ZS0 && ZS0.agentStateOn === false) { return; }
+    if (window.__zcodeAgentOn) { return; }   // 同窗口重复注入防重入（BODY 的 __zcodeDone 同款语义）
+    window.__zcodeAgentOn = true;
+
+    var doc = document;
+    // 选择器常量（复制，出处见文件头注释；禁止闭包引用兄弟模块）
+    var RUN_SEL = '[data-testid^="v4-stop"], [data-testid^="chat-loading"]';
+    var ROW_SEL = '[data-testid^="v4-row"]';
+    var REASON_SEL = '[data-testid^="chat-reasoning"]';
+    var DOCK_SEL = '[data-v4-composer-dock="true"]';
+    // 确认弹窗族（06_composer.js:456-467 POPUP_HINT_SEL 全量复制，含 v57/v61/v64 三轮扩展）
+    var POPUP_SEL = '[role="dialog"], [role="alertdialog"], [data-testid*="ask" i], [data-testid*="confirm" i], ' +
+      '[data-testid*="dialog" i], [data-testid*="modal" i], [data-testid*="popup" i], [data-testid*="request" i], [aria-modal="true"], ' +
+      '[data-elicitation-dialog-card], [data-elicitation-dialog-body], ' +
+      '[data-testid*="permission" i], [data-testid*="approve" i], [data-testid*="allow" i], ' +
+      '[data-testid*="authorize" i], [data-testid*="can-use" i], [data-testid*="consent" i], ' +
+      '[data-testid*="hook-pending" i], [data-testid*="user-input" i]';
+
+    // 系统"减弱动态效果"（注入层作用域内 matchMedia 可用；uiAnim 固定开启无需另查 ANIM_ON）
+    var REDUCED = false;
+    try { REDUCED = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (eR) {}
+    var last = 'unknown';
+    var wasActive = false;   // 上拍是否 generating|thinking（done 下降沿的"沿"来源）
+    var dotHideT = 0;
+
+    function rowIdOf(el){
+      // 07_settings.js:201-204 rowIdOf 同款等价重写
+      var tid = el.getAttribute ? (el.getAttribute('data-testid') || '') : '';
+      return tid.replace(/^v4-row-/, '');
+    }
+    function isAssistant(row){
+      return (' ' + (row.className || '') + ' ').indexOf('group/assistant-row') >= 0;
+    }
+    function lastAssistantRow(){
+      try {
+        var rows = doc.querySelectorAll(ROW_SEL);
+        for (var i = rows.length - 1; i >= 0; i--) {
+          if (rows[i].parentNode && isAssistant(rows[i])) { return rows[i]; }
+        }
+      } catch (e) {}
+      return null;
+    }
+    // "开着"的确认弹窗：可见性检查复制自 06_composer.js:474-483 findPopup（v60 教训——关闭的
+    // 弹窗节点残留 data-state=closed/display:none/visibility:hidden/opacity:0，不能算命中）。
+    // 不做 06 的 fixed/absolute 几何兜底扫描（那是完整防御），此处宁漏报不误报。
+    function openPopup(dock){
+      try {
+        var hit = dock.querySelectorAll(POPUP_SEL);
+        for (var i = 0; i < hit.length; i++) {
+          var el = hit[i];
+          if (el.id && el.id.indexOf('zcode-') === 0) { continue; }   // 自家注入层不算
+          if ((el.getAttribute('data-state') || '') === 'closed') { continue; }
+          var cs = getComputedStyle(el);
+          if (cs.display === 'none' || cs.visibility === 'hidden' || parseFloat(cs.opacity) === 0) { continue; }
+          return el;
+        }
+      } catch (e) {}
+      return null;
+    }
+    function snippetOf(el){
+      // 最后文本片段：行/弹窗内最后一段非空文字（07_settings.js:169-175 send() 同款取法），≤60 字
+      var t = '';
+      try { t = ((el.innerText === undefined ? el.textContent : el.innerText) || '').trim(); } catch (eT) { t = ''; }
+      var lines = t.split('\n').map(function(s){ return s.trim(); }).filter(function(s){ return s.length > 0; });
+      var s = lines.length ? lines[lines.length - 1] : t;
+      if (s.length > 60) { s = s.slice(0, 60) + '…'; }
+      return s;
+    }
+    function classify(){
+      // 优先级：waitConfirm（用户须行动）> generating > thinking > done 沿 > idle/unknown
+      var dock = doc.querySelector(DOCK_SEL);
+      var pop = dock ? openPopup(dock) : null;
+      if (pop) { return { s: 'waitConfirm', snip: snippetOf(pop) }; }
+      if (doc.querySelector(RUN_SEL)) {
+        var ar = lastAssistantRow();
+        return { s: 'generating', snip: ar ? snippetOf(ar) : '' };
+      }
+      var row = lastAssistantRow();
+      if (row && row.querySelector(REASON_SEL)) { return { s: 'thinking', snip: snippetOf(row) }; }
+      if (wasActive && row) {
+        // 下降沿 + 行完成证据（反馈按钮行外按 rid 关联，07_settings.js:164-165 同款）；
+        // 查不到证据（行已虚拟化卸载/选择器漂移）→ idle，宁漏报不误报
+        var rid = rowIdOf(row);
+        if (rid && doc.querySelector('[data-testid="v4-feedback-like-' + rid + '"], [data-testid="v4-feedback-dislike-' + rid + '"]')) {
+          return { s: 'done', snip: snippetOf(row) };
+        }
+      }
+      return { s: doc.querySelector(ROW_SEL) ? 'idle' : 'unknown', snip: '' };
+    }
+    // ---------- 悬浮状态光点（自绘；呼吸 keyframes 与 --zc-live/--zc-warn token 在 02_style） ----------
+    // 位置：收纳图标（左下 12,12+safeB，44px）右上角外——图标自身的手势区之外，不干扰其命中
+    function dotEl(){
+      var d = doc.getElementById('zcode-agent-dot');
+      if (!d) {
+        d = doc.createElement('div');
+        d.id = 'zcode-agent-dot';
+        d.style.cssText = 'position:fixed;left:53px;bottom:calc(53px + var(--zc-safe-b, 0px));' +
+          'width:6px;height:6px;border-radius:3px;z-index:99997;pointer-events:none;';
+        (doc.body || doc.documentElement).appendChild(d);
+      }
+      return d;
+    }
+    function dotOff(){
+      if (dotHideT) { clearTimeout(dotHideT); dotHideT = 0; }
+      var d = doc.getElementById('zcode-agent-dot');
+      if (d && d.parentNode) { try { d.parentNode.removeChild(d); } catch (e0) {} }
+    }
+    function renderDot(s){
+      if (s !== 'thinking' && s !== 'generating' && s !== 'waitConfirm' && s !== 'done') { dotOff(); return; }
+      var d = dotEl();
+      if (dotHideT) { clearTimeout(dotHideT); dotHideT = 0; }
+      d.style.animation = 'none';
+      d.style.transition = '';
+      d.style.opacity = '1';
+      if (s === 'waitConfirm') {
+        d.style.background = 'var(--zc-warn)';   // amber 常亮
+        return;
+      }
+      d.style.background = 'var(--zc-live)';
+      if (s === 'done') {
+        // 绿常亮 2s 渐隐后移除（done 是瞬时沿）；减弱动效下渐隐是动画 → 直接移除
+        if (REDUCED) { dotOff(); return; }
+        d.style.transition = 'opacity 2s ease-out';
+        void d.offsetWidth;   // 起点帧先生效，否则过渡不触发（同 06 morphGhost 的做法）
+        d.style.opacity = '0';
+        dotHideT = setTimeout(dotOff, 2100);
+        return;
+      }
+      // thinking|generating：呼吸绿 1.2s（状态灯呼吸 = 全 App 唯一 >300ms 动画例外）；
+      // prefers-reduced-motion 时降级半透明常亮（不播动画）
+      if (REDUCED) { d.style.opacity = '0.55'; return; }
+      d.style.animation = 'zcodeDotBreath 1.2s ease-in-out infinite';
+    }
+    function tick(){
+      var zs = window.__zcSettings;
+      if (zs && zs.agentStateOn === false) { dotOff(); return; }   // 热更关：空拍静默
+      var r;
+      try { r = classify(); } catch (eC) { r = { s: 'unknown', snip: '' }; }
+      if (r.s !== last) {
+        last = r.s;   // 先记账再打桥：桥抛异常不至于每拍重报
+        var br = window.zcodeBridge;
+        if (br && br.onAgentState) { try { br.onAgentState(r.s, r.snip || ''); } catch (eB) {} }
+      }
+      try { renderDot(r.s); } catch (eD) {}
+      wasActive = (r.s === 'generating' || r.s === 'thinking');
+    }
+    tick();   // 首拍立即建立基线（unknown 起步，无沿不报）
+    setInterval(tick, 1000);
+  })();
 }
 """
 }
@@ -3435,6 +3646,14 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
     private var pausedForSettings = false
     /** 上次注入页面的会话页设置快照（设置页返回时对比，变化即热更新，null = 还没注入过） */
     private var applied: PageSettings? = null
+
+    /** 一期状态感知轴：顶部 2dp 状态条（activity_web.agentStrip）。最近一次桥上报状态——
+     *  初始 unknown = 条 GONE；进程重启不恢复（状态是易逝的运行时信号，陈旧值无意义，
+     *  落盘的 AgentStateStore 只供后续仪表盘/小部件消费）。 */
+    private lateinit var agentStrip: View
+    private var agentState: String = "unknown"
+    /** 状态条当前动画（呼吸/渐隐）；切换状态前取消，防旧动画写新条 */
+    private var stripAnim: ValueAnimator? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -3506,6 +3725,7 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
         progress = findViewById(R.id.progress)
         errorView = findViewById(R.id.errorView)
         errorText = findViewById(R.id.errorText)
+        agentStrip = findViewById(R.id.agentStrip)
         findViewById<Button>(R.id.btnRetry).setOnClickListener {
             errorView.visibility = View.GONE
             webView.reload()
@@ -3640,11 +3860,16 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
         // 不等 1s 轮询，避免真机首帧图标/输入框先贴到系统手势条再跳一下。
         // v79：会话页新开关走 window.__zcSettings（bundle 读它做初始值，applySettings 热更）
         // v80：⑧长按菜单已删除（longPressMenu 键退役）；v81：③键盘跟随已删除
-        //（kbFollowExp 键退役，旧页面存档多出的键无害）
+        //（kbFollowExp 键退役，旧页面存档多出的键无害）；P0①：触感开关 hapticOn（默认开）；
+        // 一期：状态感知轴三键 agentStateOn/statusStripOn/errNotifyOn（只读观测类默认开）
         val js = "window.__zcodeSafeB=" + lastSafeB + ";" +
             "window.__zcSettings={" +
             "\"sendMinimize\":" + settings.sendMinimize + "," +
-            "\"amoledBlack\":" + settings.amoledBlack + "};" +
+            "\"amoledBlack\":" + settings.amoledBlack + "," +
+            "\"hapticOn\":" + settings.hapticOn + "," +
+            "\"agentStateOn\":" + settings.agentStateOn + "," +
+            "\"statusStripOn\":" + settings.statusStripOn + "," +
+            "\"errNotifyOn\":" + settings.errNotifyOn + "};" +
             "(" + BUNDLE_JS.trim() + ")(" +
             JSONObject.quote(css.toString()) + ", " +
             settings.turnNavigator + ", " +
@@ -3673,12 +3898,103 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
             "\"floatInput\":" + s.floatingInput + "," +
             "\"restoreOnBottom\":" + s.restoreOnBottom + "," +
             "\"sendMinimize\":" + s.sendMinimize + "," +
-            "\"amoledBlack\":" + s.amoledBlack + "})"
+            "\"amoledBlack\":" + s.amoledBlack + "," +
+            "\"hapticOn\":" + s.hapticOn + "," +
+            "\"agentStateOn\":" + s.agentStateOn + "," +
+            "\"statusStripOn\":" + s.statusStripOn + "," +
+            "\"errNotifyOn\":" + s.errNotifyOn + "})"
         webView.evaluateJavascript(js, null)
+        // statusStripOn 的原生消费：关 = 状态条 GONE，开 = 按最近状态恢复呈现
+        renderAgentStrip(agentState)
     }
 
     private fun toast(resId: Int) =
         Toast.makeText(this, resId, Toast.LENGTH_SHORT).show()
+
+    /**
+     * 一期状态感知轴：状态条呈现（evolution-plan §3.2/§4.2，与注入层光点/信号灯表严格
+     * 同源、不另设色）——thinking|generating = 绿呼吸 1.2s、waitConfirm = amber 常亮、
+     * done 沿 = 绿常亮 2s 渐隐后 GONE、其余（idle/unknown；error 本期不产出）= GONE。
+     * statusStripOn 关 = GONE。减弱动效自读 Settings.Global.ANIMATOR_DURATION_SCALE==0
+     * （不读注入层变量，评审 10）：呼吸降级半透明常亮；渐隐改半透明常亮 2s 后隐藏。
+     */
+    private fun renderAgentStrip(state: String) {
+        if (!::agentStrip.isInitialized) return
+        agentState = state   // 先记账：旧动画 cancel 触发的 onAnimationEnd 以此甄别新状态
+        stripAnim?.cancel()
+        stripAnim = null
+        if (!settings.statusStripOn) {
+            agentStrip.visibility = View.GONE
+            return
+        }
+        val reduced = try {
+            Settings.Global.getFloat(
+                contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f,
+            ) == 0f
+        } catch (e: Exception) {
+            false
+        }
+        when (state) {
+            "thinking", "generating" -> {
+                agentStrip.visibility = View.VISIBLE
+                tintStrip(R.color.status_live)
+                if (reduced) {
+                    agentStrip.alpha = 0.5f
+                } else {
+                    agentStrip.alpha = 1f
+                    stripAnim = ValueAnimator.ofFloat(1f, 0.25f).apply {
+                        // 状态灯呼吸：全 App 唯一常驻动画例外（1.2s，原则 5）
+                        duration = 1200L
+                        repeatCount = ValueAnimator.INFINITE
+                        repeatMode = ValueAnimator.REVERSE
+                        addUpdateListener { a -> agentStrip.alpha = a.animatedValue as Float }
+                        start()
+                    }
+                }
+            }
+            "waitConfirm" -> {
+                agentStrip.visibility = View.VISIBLE
+                tintStrip(R.color.status_warn)
+                agentStrip.alpha = 1f
+            }
+            "done" -> {
+                agentStrip.visibility = View.VISIBLE
+                tintStrip(R.color.status_live)
+                if (reduced) {
+                    // 渐隐是动画：减弱动效下降级半透明常亮 2s 后隐藏
+                    agentStrip.alpha = 0.5f
+                    agentStrip.postDelayed({
+                        if (agentState == "done") agentStrip.visibility = View.GONE
+                    }, 2000L)
+                } else {
+                    agentStrip.alpha = 1f
+                    stripAnim = ValueAnimator.ofFloat(1f, 0f).apply {
+                        duration = 2000L
+                        addUpdateListener { a -> agentStrip.alpha = a.animatedValue as Float }
+                        addListener(object : AnimatorListenerAdapter() {
+                            override fun onAnimationEnd(animation: Animator?) {
+                                if (agentState == "done") agentStrip.visibility = View.GONE
+                            }
+                        })
+                        start()
+                    }
+                }
+            }
+            else -> {
+                // idle/unknown：灭灯（unknown 自隐不误报）
+                agentStrip.visibility = View.GONE
+            }
+        }
+    }
+
+    /** 状态条着色（语义槽位 @color/status_*，随深浅两表自动换值）；失败保持上次颜色不炸 */
+    private fun tintStrip(colorRes: Int) {
+        try {
+            agentStrip.background?.mutate()?.setTint(resources.getColor(colorRes, null))
+        } catch (e: Exception) {
+            // tint 失败：保持上次颜色，静默
+        }
+    }
 
     private fun setupBackHandling() {
         onBackPressedDispatcher.addCallback(
@@ -3707,6 +4023,13 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
         super.onResume()
         appVisible = true
         pausedForSettings = false
+        // 二期仪表盘：回到会话即视为已读——清当前会话未读计数（入口页台面卡/小卡角标
+        // 消费；计数纯呈现性质，失败静默不影响会话）
+        try {
+            RecentStore(this).clearUnread(currentUrl)
+        } catch (e: Exception) {
+            // 未读是展示位，清零失败不干扰会话主流程
+        }
         // 从设置页返回：对比设置快照，变化则热更新页面（不重进会话）
         applySettingsIfChanged()
     }
@@ -3750,6 +4073,15 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
                 // 统一走标准横幅通知：前台弹横幅，后台进通知栏
                 showReplyNotification(url, text)
                 recordReplyTrace("notified", text, "posted")
+                // 二期仪表盘：会话不在前台（切出/在入口页）时计未读——前台观看中的流式
+                // 回复不算未读；定位在去重之后，一条"新回复"计一次，入口页角标消费
+                if (!appVisible) {
+                    try {
+                        RecentStore(this@WebActivity).incrementUnread(url)
+                    } catch (e: Exception) {
+                        // 未读计数纯展示性质，失败静默
+                    }
+                }
             }
         }
 
@@ -3757,6 +4089,40 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
         fun onProgress(text: String) {
             // 中间进度：只滚动更新保活通知预览，不弹横幅（最终横幅由 onReply 负责）
             KeepAliveService.updateReplyPreview(this@WebActivity, text)
+        }
+
+        /**
+         * 一期状态感知轴（B2 桥）：09_agent.js 只读状态机上报状态沿（JS 侧只报变化沿）。
+         * state ∈ thinking/generating/waitConfirm/done/idle/unknown——error 本期 JS 不产出
+         * （错误行选择器未经实机取证，宁漏报不误报）。更新 AgentStateStore（供后续仪表盘/
+         * 小部件消费）+ 驱动顶部状态条；任何异常静默（缺件健全），本桥未注册时 JS 侧判空跳过。
+         */
+        @JavascriptInterface
+        fun onAgentState(state: String, snippet: String) {
+            runOnUiThread {
+                // 沿检测基准：renderAgentStrip 会把 agentState 记成新状态，先取旧值
+                val prev = agentState
+                try {
+                    AgentStateStore(this@WebActivity).update(state, snippet)
+                } catch (e: Exception) {
+                    // 落盘失败不影响状态条呈现
+                }
+                renderAgentStrip(state)
+                // 二期系统集成：waitConfirm 上升沿 → 独立 HIGH 通知（摘要+点击直达，
+                // 无 action 按钮、不走 ReplyDedupe、不重复震动——页面侧已 haptic('confirm')）；
+                // 下降沿撤下。失败静默不影响状态条（缺件健全）
+                try {
+                    ConfirmNotify.onEdge(this@WebActivity, prev, state, snippet, url)
+                } catch (e: Exception) {
+                    // 通知失败不影响会话
+                }
+                // 二期小部件：状态变化即推刷新（无部件安装时零开销）
+                try {
+                    SessionWidgetProvider.push(this@WebActivity)
+                } catch (e: Exception) {
+                    // 部件刷新失败静默
+                }
+            }
         }
 
         @JavascriptInterface
@@ -3795,6 +4161,22 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
         fun getTrace(): String {
             return getSharedPreferences(TRACE_PREFS, Context.MODE_PRIVATE)
                 .getString(KEY_TRACE, "[]") ?: "[]"
+        }
+
+        /**
+         * P0①：触感桥——注入层状态确认震（sent=发送成功、confirm=确认弹窗出现）。
+         * 白名单外的 kind 静默忽略（旧 bundle/热更滞后时不炸）；不碰 UI，桥线程直震
+         * 免排队；hapticOn 关闭/无权限在 Haptics 内静默跳过。
+         */
+        @JavascriptInterface
+        fun haptic(kind: String) {
+            when (kind) {
+                "sent" -> Haptics.sent(this@WebActivity)
+                "confirm" -> Haptics.confirm(this@WebActivity)
+                "done" -> Haptics.done(this@WebActivity)
+                "connect" -> Haptics.connect(this@WebActivity)
+                "error" -> Haptics.error(this@WebActivity)
+            }
         }
 
         @JavascriptInterface
@@ -3868,8 +4250,11 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .build()
         nm.notify(2000 + (notifSeq++ % 20), n)
-        // 保活通知同步带上最近回复预览（锁屏可见），服务未运行时仅存档
-        KeepAliveService.updateReplyPreview(this, text)
+        // 保活通知同步带上最近回复预览（锁屏可见），服务未运行时仅存档。
+        // replyArrived=true：本调用来自去重通过的回复链路（onProgress 的中间进度走默认 false，
+        // 不落最近列表）；url=桥构造时的会话链接，RecentStore 按 sameSession 定位目标卡片
+        // （深链直启不经 upsert，头部不一定是当前会话）
+        KeepAliveService.updateReplyPreview(this, text, replyArrived = true, url = url)
     }
 
     /** 回复链路原生侧埋点（最近 6 条，持久化以支持 Activity 重建后读取，随诊断 JSON 上报）。 */

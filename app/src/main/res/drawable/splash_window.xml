@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 8-11 启动屏窗口底（evolution-plan §3.5，不引 SplashScreen 库）：
+     @color/background 打底 + 居中 96dp >_ 标记。12+ 由 drawable-v31 同名资源
+     还原为纯底色，系统默认启动屏不受影响。 -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/background" />
+    <item
+        android:drawable="@drawable/ic_splash_logo"
+        android:gravity="center" />
+</layer-list>

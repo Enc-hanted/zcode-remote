@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 应用快捷方式（二期「系统集成」，长按图标）：两条都经已导出的 EntryActivity 路由
+     （WebActivity exported=false 不直接暴露）；动作串与 EntryActivity.ACTION_* 同源，
+     路由在 onCreate/onNewIntent 统一处理，autoJumpedOnce 协调防双跳。 -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <shortcut
+        android:shortcutId="resume_last"
+        android:enabled="true"
+        android:icon="@drawable/ic_bolt"
+        android:shortcutShortLabel="@string/resume_last_title"
+        android:shortcutLongLabel="@string/resume_last_title">
+        <intent
+            android:action="com.zcode.remote.action.RESUME_LAST"
+            android:targetClass="com.zcode.remote.EntryActivity"
+            android:targetPackage="com.zcode.remote" />
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="scan_connect"
+        android:enabled="true"
+        android:icon="@drawable/ic_scan"
+        android:shortcutShortLabel="@string/connect_scan"
+        android:shortcutLongLabel="@string/connect_scan">
+        <intent
+            android:action="com.zcode.remote.action.START_SCAN"
+            android:targetClass="com.zcode.remote.EntryActivity"
+            android:targetPackage="com.zcode.remote" />
+    </shortcut>
+</shortcuts>

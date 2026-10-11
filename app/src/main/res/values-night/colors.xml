@@ -1,12 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- 深色主题（系统深色模式）：纯黑灰系，无蓝调 -->
+    <!-- 深色主题（系统深色模式）：纯黑灰系底座，品牌绿 accent -->
     <color name="background">#0A0A0A</color>
     <color name="surface">#161616</color>
+    <color name="surface_high">#1E1E1E</color>
     <color name="stroke">#262626</color>
-    <color name="accent">#9A9A9A</color>
-    <color name="on_accent">#0A0A0A</color>
+    <color name="stroke_strong">#3A3A3A</color>
+    <color name="accent">#00E676</color>
+    <color name="on_accent">#000000</color>
     <color name="text_primary">#F0F0F0</color>
     <color name="text_secondary">#8F8F8F</color>
+    <color name="text_tertiary">#5A5A5A</color>
+    <!-- status_*：语义槽位，P0 仅落表，一期状态条消费 -->
+    <color name="status_live">#00E676</color>
+    <color name="status_warn">#F0B232</color>
+    <color name="status_error">#F23F43</color>
+    <color name="status_offline">#6A6A6A</color>
     <color name="ic_launcher_background">#0A0A0A</color>
 </resources>

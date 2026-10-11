@@ -88,6 +88,16 @@
       // v81：③键盘跟随已删除，kbFollowExp 键退役（旧存档多出的键无害）
       if (o.sendMinimize !== undefined) { sendMinimize = (o.sendMinimize !== false); ZSET.sendMinimize = sendMinimize; }
       if (o.amoledBlack !== undefined) { amoledBlack = (o.amoledBlack === true); ZSET.amoledBlack = amoledBlack; applyAmoled(); }
+      // P0①：触感开关（zcHaptic 每次实时读 __zcSettings.hapticOn，写回即热更生效）
+      if (o.hapticOn !== undefined) { ZSET.hapticOn = (o.hapticOn !== false); }
+      // 一期状态感知轴三键（agentStateOn/statusStripOn/errNotifyOn，写回 ZSET 即热更）：
+      // agentStateOn 由 09_agent 每拍自读（关 = 空拍静默 + 光点移除，不跨闭包启停）；
+      // statusStripOn 的呈现消费在原生侧状态条（__zcSettings 注入序列化带同值）；
+      // errNotifyOn 键先落地、本期无消费方——错误行选择器未经实机取证（evolution-plan
+      // §4.5-6），取证通过接错误态通知时才消费
+      if (o.agentStateOn !== undefined) { ZSET.agentStateOn = (o.agentStateOn !== false); }
+      if (o.statusStripOn !== undefined) { ZSET.statusStripOn = (o.statusStripOn !== false); }
+      if (o.errNotifyOn !== undefined) { ZSET.errNotifyOn = (o.errNotifyOn !== false); }
       // 滚动条热切（原生已注入原版，这里只在变化时加覆盖样式）
       if (o.scrollbar !== undefined) { setScrollbar(o.scrollbar); }
     }

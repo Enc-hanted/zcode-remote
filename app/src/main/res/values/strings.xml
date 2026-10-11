@@ -20,6 +20,7 @@
     <string name="minutes_ago">%1$d 分钟前</string>
     <string name="hours_ago">%1$d 小时前</string>
     <string name="yesterday">昨天 %1$s</string>
+    <string name="recent_last_reply">%1$s · %2$s</string>
     <string name="settings_title">设置</string>
     <string name="settings_section_page">会话页</string>
     <string name="settings_hide_scrollbar">隐藏滚动条</string>
@@ -77,4 +78,26 @@
     <string name="back_home">返回入口页</string>
     <string name="camera_denied">没有相机权限，无法扫码；可改用粘贴链接</string>
     <string name="auto_resumed">已自动恢复上次会话（按返回键可回入口页）</string>
+    <!-- 二期入口会话仪表盘 -->
+    <string name="version_fmt">v%1$s</string>
+    <string name="state_idle">待命</string>
+    <string name="state_streaming">流式中</string>
+    <string name="state_thinking">思考中</string>
+    <string name="state_wait_confirm">等待确认</string>
+    <string name="keep_alive_left">保活中 · 剩 %1$d 分</string>
+    <string name="manual_input">+ 手动输入</string>
+    <!-- 二期系统集成（§4.3） -->
+    <string name="confirm_notif_channel">等待确认提醒</string>
+    <string name="confirm_notif_fallback">页面出现确认弹窗，点按回会话处理</string>
+    <string name="widget_label">会话状态</string>
+    <string name="widget_desc">会话名、状态色点与最近回复（上次快照）</string>
+    <string name="widget_no_session">还没有会话，点按打开 ZCode Remote</string>
+    <string name="widget_stale">上次 · %1$s</string>
+    <string name="resume_last_title">回最近会话</string>
+    <string name="no_recent_session">还没有会话记录，请先扫码或粘贴连接</string>
+    <string name="draft_title">待发草稿</string>
+    <string name="draft_copied_toast">草稿已复制，粘贴发送</string>
+    <string name="draft_copy_open">复制并进入</string>
+    <string name="draft_copy_only">复制</string>
+    <string name="draft_clear_confirm">删除待发草稿？</string>
 </resources>

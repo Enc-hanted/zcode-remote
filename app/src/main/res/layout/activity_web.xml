@@ -5,6 +5,16 @@
     android:background="@color/background"
     android:orientation="vertical">
 
+    <!-- 一期状态感知轴：顶部 2dp 状态条（thinking/generating=绿呼吸 1.2s、waitConfirm=
+         amber 常亮、done 沿=绿常亮 2s 渐隐、其余 GONE；颜色走语义槽位 status_live/
+         status_warn，tint 由 WebActivity 按状态切换；statusStripOn 关 = GONE） -->
+    <View
+        android:id="@+id/agentStrip"
+        android:layout_width="match_parent"
+        android:layout_height="2dp"
+        android:background="@color/status_live"
+        android:visibility="gone" />
+
     <ProgressBar
         android:id="@+id/progress"
         style="?android:attr/progressBarStyleHorizontal"

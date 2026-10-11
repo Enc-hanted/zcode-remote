@@ -1,4 +1,6 @@
 // ===== 08_boot.js (1708-1785) =====
+  // （拼接结构：最外层包装函数由 01_core.js 开、09_agent.js 末尾闭——本文件不再收尾，
+  //   09_agent 的顶层执行段接在本文件之后、同处包装函数顶层作用域）
   // ---------- 顶层执行 ----------
   // BODY 包 try/catch：注入失败不静默（错误进 __zcodeErrors，诊断卡可查）
   try {
@@ -76,4 +78,3 @@
       for (var j = 0; j < all4.length; j++) { if (all4[j].shadowRoot) { queueShadow(all4[j].shadowRoot); } }
     } catch (e) {}
   }, 30000);
-}

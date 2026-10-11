@@ -11,6 +11,10 @@ data class PageSettings(
     val restoreOnBottom: Boolean,
     val sendMinimize: Boolean,
     val amoledBlack: Boolean,
+    val hapticOn: Boolean,
+    val agentStateOn: Boolean,
+    val statusStripOn: Boolean,
+    val errNotifyOn: Boolean,
 )
 
 /** 基础设置：会话页外观与后台保活策略。 */
@@ -83,6 +87,27 @@ class SettingsStore(context: Context) {
         get() = prefs.getBoolean(KEY_AMOLED_BLACK, false)
         set(v) = prefs.edit().putBoolean(KEY_AMOLED_BLACK, v).apply()
 
+    /** P0①：触感反馈总开关（done/sent/confirm 状态确认震）；本 P0 先无设置页 UI，默认开 */
+    var hapticOn: Boolean
+        get() = prefs.getBoolean(KEY_HAPTIC_ON, true)
+        set(v) = prefs.edit().putBoolean(KEY_HAPTIC_ON, v).apply()
+
+    /** 一期：注入层只读状态机总开关（09_agent 轮询/光点/上报）；关 = 模块不启动。默认开 */
+    var agentStateOn: Boolean
+        get() = prefs.getBoolean(KEY_AGENT_STATE_ON, true)
+        set(v) = prefs.edit().putBoolean(KEY_AGENT_STATE_ON, v).apply()
+
+    /** 一期：会话页顶部原生状态条呈现开关（绿呼吸/amber/渐隐沿）；关 = 条 GONE。默认开 */
+    var statusStripOn: Boolean
+        get() = prefs.getBoolean(KEY_STATUS_STRIP_ON, true)
+        set(v) = prefs.edit().putBoolean(KEY_STATUS_STRIP_ON, v).apply()
+
+    /** 一期（预留）：错误态通知开关——错误行选择器未经实机取证，本期无消费方
+     *  （evolution-plan §4.5-6），键先落地走完整注入/热更链路 */
+    var errNotifyOn: Boolean
+        get() = prefs.getBoolean(KEY_ERR_NOTIFY_ON, true)
+        set(v) = prefs.edit().putBoolean(KEY_ERR_NOTIFY_ON, v).apply()
+
     /** 浮动 logo 是否被拖过位置（v65 起 logo 已移除，字段保留兼容旧存档与桥接口） */
     var logoPosSet: Boolean
         get() = prefs.getBoolean(KEY_LOGO_POS_SET, false)
@@ -106,6 +131,10 @@ class SettingsStore(context: Context) {
         restoreOnBottom = restoreOnBottom,
         sendMinimize = sendMinimize,
         amoledBlack = amoledBlack,
+        hapticOn = hapticOn,
+        agentStateOn = agentStateOn,
+        statusStripOn = statusStripOn,
+        errNotifyOn = errNotifyOn,
     )
 
     companion object {
@@ -120,6 +149,10 @@ class SettingsStore(context: Context) {
         private const val KEY_RESTORE_ON_BOTTOM = "restore_on_bottom"
         private const val KEY_SEND_MINIMIZE = "send_minimize"
         private const val KEY_AMOLED_BLACK = "amoled_black"
+        private const val KEY_HAPTIC_ON = "haptic_on"
+        private const val KEY_AGENT_STATE_ON = "agent_state_on"
+        private const val KEY_STATUS_STRIP_ON = "status_strip_on"
+        private const val KEY_ERR_NOTIFY_ON = "err_notify_on"
         private const val KEY_LOGO_POS_SET = "logo_pos_set"
         private const val KEY_LOGO_X = "logo_x"
         private const val KEY_LOGO_Y = "logo_y"

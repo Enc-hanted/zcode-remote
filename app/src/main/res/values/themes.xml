@@ -9,6 +9,7 @@
         <item name="colorOutline">@color/stroke</item>
         <item name="android:statusBarColor">@color/background</item>
         <item name="android:navigationBarColor">@color/background</item>
-        <item name="android:windowBackground">@color/background</item>
+        <!-- 8-11 启动屏：底色+居中 >_（drawable/splash_window.xml）；12+ 被 drawable-v31 同名资源还原为纯底色 -->
+        <item name="android:windowBackground">@drawable/splash_window</item>
     </style>
 </resources>

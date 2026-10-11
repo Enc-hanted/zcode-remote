@@ -1,12 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- 浅色主题（系统浅色模式） -->
+    <!-- 浅色主题（系统浅色模式）：品牌绿 accent -->
     <color name="background">#F5F7FB</color>
     <color name="surface">#FFFFFF</color>
+    <color name="surface_high">#F0F2F6</color>
     <color name="stroke">#E3E8F0</color>
-    <color name="accent">#2E6BE6</color>
+    <color name="stroke_strong">#C9D1DE</color>
+    <color name="accent">#00875A</color>
     <color name="on_accent">#FFFFFF</color>
     <color name="text_primary">#1B2230</color>
     <color name="text_secondary">#6B7486</color>
+    <color name="text_tertiary">#9AA3B2</color>
+    <!-- status_*：语义槽位，P0 仅落表，一期状态条消费 -->
+    <color name="status_live">#00875A</color>
+    <color name="status_warn">#B26A00</color>
+    <color name="status_error">#C63C40</color>
+    <color name="status_offline">#6A6A6A</color>
     <color name="ic_launcher_background">#0A0A0A</color>
 </resources>

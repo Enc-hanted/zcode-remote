@@ -9,6 +9,8 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <!-- P0①：触感反馈（回复到达/发送成功/确认弹窗的短震确认），normal 权限装时即授予 -->
+    <uses-permission android:name="android.permission.VIBRATE" />
 
     <!-- 没有相机的设备也能用粘贴链接的方式，相机非必需 -->
     <uses-feature
@@ -28,11 +30,24 @@
             android:name=".EntryActivity"
             android:alwaysRetainTaskState="true"
             android:exported="true"
+            android:launchMode="singleTop"
             android:windowSoftInputMode="adjustPan">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- 二期系统分享入口：系统分享面板把文字/链接发进来（暂存+直达+剪贴板；
+                 不向 z.ai 输入框写文本——页面写入属三期 Lexical 门控） -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+            <!-- 二期应用快捷方式：回最近会话/扫码连接，经已导出的 EntryActivity 路由
+                 （WebActivity exported=false 不直接暴露） -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
         </activity>
 
         <activity
@@ -54,6 +69,33 @@
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="keep_remote_session_alive" />
+        </service>
+
+        <!-- 二期桌面小部件（单格会话状态）：manifest 注册 receiver；不添加即不存在，
+             数据只读既有落盘，无 RemoteViewsService -->
+        <receiver
+            android:name=".SessionWidgetProvider"
+            android:exported="false"
+            android:label="@string/widget_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_session_info" />
+        </receiver>
+
+        <!-- 二期快捷设置磁贴「回最近会话」：exported=true 是系统绑定 TileService 的
+             要求（BIND_QUICK_SETTINGS_TILE 权限保护，第三方绑不上）；不添加即不存在 -->
+        <service
+            android:name=".ResumeTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_bolt"
+            android:label="@string/resume_last_title"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
         </service>
     </application>
 </manifest>

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 会话小部件底面：surface 卡 + 1dp 描边 + 12dp 圆角（与 App 卡片语言同构，
+     无阴影——全 App 阴影仅 FAB 一处） -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/surface" />
+    <corners android:radius="12dp" />
+    <stroke
+        android:width="1dp"
+        android:color="@color/stroke" />
+</shape>

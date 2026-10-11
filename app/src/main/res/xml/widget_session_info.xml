@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 单格会话小部件元数据（二期「系统集成」）。最小占位 110x40dp（约 2x1 格——单格
+     40x40dp 物理上放不下 规格 的四要素），targetCell* 是 31+ 精确格数（旧平台忽略）。
+     updatePeriodMillis=30 分钟（系统下限）：不为实时——只为进程死后周期重渲染，
+     把陈旧的相对时间刷新并标「上次」。 -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="110dp"
+    android:minHeight="40dp"
+    android:targetCellWidth="2"
+    android:targetCellHeight="1"
+    android:resizeMode="horizontal"
+    android:maxResizeWidth="250dp"
+    android:updatePeriodMillis="1800000"
+    android:initialLayout="@layout/widget_session"
+    android:widgetCategory="home_screen"
+    android:description="@string/widget_desc" />

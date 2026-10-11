@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 启动屏 >_ 标记：几何与 ic_logo.xml 逐值同源（viewport 24 / stroke 2.4 圆帽圆角），
+     仅固有尺寸放大到 96dp 供 splash_window layer-list 居中摆放；颜色走语义 @color/accent
+     （昼 #00875A / 夜 #00E676，随 DayNight 自动解析）。 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="96dp"
+    android:height="96dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M6,6l6,6-6,6"
+        android:strokeColor="@color/accent"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:strokeWidth="2.4" />
+    <path
+        android:pathData="M13,18h6"
+        android:strokeColor="@color/accent"
+        android:strokeLineCap="round"
+        android:strokeWidth="2.4" />
+</vector>

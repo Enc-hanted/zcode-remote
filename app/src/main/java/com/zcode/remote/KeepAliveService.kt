@@ -82,6 +82,24 @@ class KeepAliveService : Service() {
         @Volatile
         private var running = false
 
+        /** 二期入口仪表盘只读消费：保活周期是否存活（纯读 running 标志，零行为变更） */
+        fun isRunning(): Boolean = running
+
+        /** 二期入口仪表盘只读消费：本轮保活时长（分钟，KEY_MINUTES 原值——与保活通知
+         *  「剩 X 分」同源同口径：通知自建成不递减，这里保持一致；非实时倒计时）。 */
+        fun keepAliveMinutes(context: Context): Int =
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .getInt(KEY_MINUTES, DEFAULT_MINUTES)
+
+        /** 二期小部件只读消费：最近一次回复预览（KEY_REPLY_PREVIEW 原值；回会话时被
+         *  clearReplyPreview 清空，消费方自行退回最近列表的末条回复摘要）。纯读。 */
+        fun replyPreview(context: Context): String = try {
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .getString(KEY_REPLY_PREVIEW, "") ?: ""
+        } catch (e: Exception) {
+            ""
+        }
+
         /** 在 WebActivity 还位于前台时调用（onPause 阶段），绕开后台启动 FGS 的限制。 */
         fun start(context: Context, minutes: Int, url: String) {
             if (minutes <= 0) return
@@ -104,19 +122,40 @@ class KeepAliveService : Service() {
             context.stopService(Intent(context, KeepAliveService::class.java))
         }
 
-        /** 收到新回复时调用：保活通知带上最近回复预览（锁屏可见）；服务未运行时仅存档，启动时带上。 */
-        fun updateReplyPreview(context: Context, text: String) {
+        /** 收到新回复时调用：保活通知带上最近回复预览（锁屏可见）；服务未运行时仅存档，启动时带上。
+         *  [replyArrived]=true 表示来自去重通过的回复链路（横幅已发）：仅此时把摘要写进最近会话
+         *  （RecentStore.lastReply/lastReplyAt，[url] 按会话定位目标卡片）——onProgress 的中间
+         *  流式进度只滚动更新通知预览，不落最近列表（否则摘要恒为"最后一次进度文本"且桥线程
+         *  每拍全量 load/save）。保活通知真正 post 后给一次 done 短震——前台会话服务必不在跑
+         *  （onStart 已 stop），走不到 post，不额外震。 */
+        fun updateReplyPreview(
+            context: Context,
+            text: String,
+            replyArrived: Boolean = false,
+            url: String = "",
+        ) {
             val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             val preview = text.trim().take(60)
             prefs.edit().putString(KEY_REPLY_PREVIEW, preview).apply()
+            if (replyArrived) {
+                RecentStore(context).updateLastReply(preview, url)
+            }
+            // 二期小部件：回复/进度文本变化即推刷新（无部件安装时零开销直接返回），
+            // 放在存档之后——服务不在跑也要刷新部件（部件不依赖保活存活）
+            try {
+                SessionWidgetProvider.push(context)
+            } catch (e: Exception) {
+                // 部件刷新失败不影响保活链路
+            }
             if (!running) return
             try {
                 val minutes = prefs.getInt(KEY_MINUTES, DEFAULT_MINUTES)
                 val url = prefs.getString(KEY_URL, "") ?: ""
                 val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                 nm.notify(NOTIF_ID, buildNotification(context, minutes, url, preview))
+                if (replyArrived) Haptics.done(context)
             } catch (e: Exception) {
-                // 通知重建失败不影响主流程
+                // 通知重建失败不影响主流程（done 震感随通知一起放弃）
             }
         }
 

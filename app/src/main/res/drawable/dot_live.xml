@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 小部件状态色点（绿=活跃系/待命）：@color 语义槽位，随深浅两表自动换值 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <solid android:color="@color/status_live" />
+</shape>

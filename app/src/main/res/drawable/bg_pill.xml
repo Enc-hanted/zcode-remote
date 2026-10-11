@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 状态芯片 / 未读角标通用的全圆 pill 底：实际颜色经 android:backgroundTint 注入
+     （@color 语义引用，随深浅两表换值），solid 仅作 tint 缺位时的兜底 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <solid android:color="@color/surface" />
+    <corners android:radius="999dp" />
+</shape>

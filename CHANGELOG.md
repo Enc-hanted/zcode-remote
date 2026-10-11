@@ -4,7 +4,38 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/)。
 
-## [未发布] — v81 工作区（bundleVer 58）
+## [未发布] — v84 工作区（bundleVer 60）
+
+evolution-plan v1.2 二期批次（入口仪表盘 / 品牌资产 / 系统集成四件）+ 收尾评审三修 + 发版收尾（versionCode 47 / versionName 0.0.6）。
+
+- **入口页升级会话仪表盘**（§3.5/§4.4）：台面卡 = recents[0] 大卡（设备名 + mid·上次活跃 mono + 状态芯片 + lastReply 摘要一行，整卡热区续连、长按删除与小卡同规），其余会话两行小卡；扫码收为右下 56dp FAB（accent 底 = 全 App 唯一实心绿，elevation 6dp = 全 App 唯一阴影且按压不抬升），粘贴降为文字按钮、手动输入折叠「+手动输入」。状态芯片只读消费 AgentStateStore（缺件/unknown/error 隐藏宁缺勿错 = 一期失败出口降级），活跃时间取 max(打开/末条回复/状态上报)；RecentStore 扩 `unread`（后台回复 +1、回会话 onResume 清零并落盘刷新，前台观看中的流式回复不算未读；optInt 缺省 0 向后兼容不 bump schema_v，WebActivity 仅动 onResume/onReply 两处）；「保活中·剩 X 分」只读 KeepAliveService 新增纯读访问器——X 与保活通知同源同口径（时长原值；服务未存启动时间戳，只读前提下无精确倒计时）
+- **品牌资产**（§3.5）：dev/_make_icons.py v2 重写为程序绘制品牌绿 `>_` 前景（几何与 ic_logo.xml 逐值同源：M6,6l6,6-6,6 + M13,18h6 / stroke 2.4 圆帽圆角，24× 超采样 LANCZOS；绿取深色 accent #00E676、黑磁贴 #0A0A0A 两模式同值不随昼夜切换；按墨迹外接圆半径适配 66dp 安全圆 95%）；新增 13+ monochrome 单色层（drawable-nodpi/ic_launcher_monochrome.png，系统按 alpha 着色）挂进两个 adaptive XML（26-32 忽略 / 13+ 主题图标生效）；启动屏不引库——新 layer-list splash_window.xml（@color/background 打底 + 居中 96dp `>_` 语义引 @color/accent 随 DayNight 昼 #00875A 夜 #00E676），drawable-v31 同名资源把 12+ 还原纯底色保系统默认启动屏，themes.xml 仅 :12 一行。12 个图标产物重跑字节级幂等，几何/同构/良构程序化验证通过
+- **系统集成① 等待确认通知**：waitConfirm 上升沿独立 HIGH 通知——新 `ConfirmNotify.kt`，channel confirm_notify + 通知 ID 3001 段（避开回复横幅 2000-2019），正文 snippet 摘要 + BigText，点击 contentIntent 直达会话（照 KeepAliveService 姿势 NEW_TASK|SINGLE_TOP|CLEAR_TOP），channel 关震动不与页面 haptic('confirm') 重复，下降沿撤下；零 action 按钮（远程批准/拒绝已否决，附录 C 冻结）、不走 ReplyDedupe（同文本 7 天去重会吞同文案提醒）；接线在 WebActivity.onAgentState 桥方法内做沿检测（先取 prev 再 renderAgentStrip）
+- **系统集成② 单行小部件（2×1）**：`SessionWidgetProvider`——会话名 + 状态色点（三 dot drawable 走 @color/status_* 随深浅两表）+ 最近回复一行 + 相对时间 mono；数据只读 RecentStore/AgentStateStore/KEY_REPLY_PREVIEW（经 KeepAlive 新增只读访问器 replyPreview，回会话清空退 recent.lastReply），回复与状态变化双推（push=getAppWidgetIds 空即返回零开销）；30 分钟 onUpdate 重渲染、数据龄超 30 分前缀「上次·」（进程死显陈旧值如实标注）；整卡点击直达 WebActivity 同 flags 姿势；无 RemoteViewsService。取舍：最小占位 110×40dp（2×1）——严格 40×40 单格放不下规格四要素，已在 XML 注释声明
+- **系统集成③ 分享入口**：ACTION_SEND text/plain **暂存 + 剪贴板形态**——EXTRA_TEXT 按不可信输入截 5000 字：ShareDraft 轻量 prefs 暂存 + 复制剪贴板 + Toast「草稿已复制，粘贴发送」+ 有最近会话直达并一次性消费草稿，无会话停留入口由台面位待发草稿卡承接（amber 竖条 + 点击复制 + 有会话进入一次性消费 + 长按删除），复制失败保留卡片 = 重试降级链；零向 z.ai 输入框写文本代码。EntryActivity singleTop + onCreate（仅 savedInstanceState == null 全新冷启动，recreate 重走不加此门防双跳）/onNewIntent 双入口共用 handleIncomingIntent，与 autoJumpedOnce/autoResume 互斥防双跳。**升级路径**：三期以 Lexical 程序化写入取证为门（报告 §7-#2），通过后升级为「分享 → 预填草稿 → 用户明确点『发送』才入正式队列」的指令下行形态（§6 三期条目）；取证不过则止于当前形态，App 完整可用
+- **系统集成④ 磁贴 + 快捷方式**：`ResumeTileService` 回最近会话（exported=true + BIND_QUICK_SETTINGS_TILE，状态只读反射 KeepAliveService.running，14+ startActivityAndCollapse(PendingIntent) 新变体 / 老版 deprecated 变体 try-catch 静默照双启动降级先例，无最近会话退 EntryActivity 永不死链）；res/xml/shortcuts.xml 两条（回最近会话/扫码连接）经已导出 EntryActivity 显式 intent 路由，扫码 onNewIntent 后挪 onResume 发起相机权限 pendingScan 一次性消费
+- **收尾评审三修**：① handleShareText 复制失败且有会话仍直达、与注释降级链不符——launchWeb 移入复制成功分支，复制失败一律停留入口由草稿卡承接（剪贴板无内容不把人带进会话）；② ConfirmNotify/widget 的 contentIntent 各分独立 requestCode（3001/4001）——PendingIntent 身份忽略 extras，本期把 WebActivity+EXTRA_URL 的消费者从 2 家扩到 4 家，共用 0 会互覆 extras；③ launchWeb 补 SINGLE_TOP|CLEAR_TOP（与 widget/磁贴/通知三处直达姿势对齐——分享到达时 Entry 在栈中但不在顶，不再多叠一层同会话 WebActivity）
+
+## [未发布] — v83 工作区（bundleVer 60）
+
+evolution-plan v1.2 一期批次：视觉收敛（设置页卡化 + 字体五档）+ 状态感知轴（只读状态机闭环）。
+
+- **设置页分组卡化**：三组（会话页/后台保活/显示）各裹 surface 卡——`@color/surface` 底、14dp 圆角、1dp `@color/stroke` 描边、elevation 0，样式收敛进 styles.xml 新增 `SettingsGroupCard`/`SettingsCardRows`；SettingsRow 结构/id/开关绑定原样未动，`SettingsDivider` 两处退役。MaterialSwitch 选中 track 经主题 `colorPrimary`（= @color/accent）间接生效，layout 目录 hex grep 零命中
+- **字体五档收敛**：全 App 字号归档 20/16/14/12/11 五档——设置页行标题 16→14sp 归正文档（activity_settings.xml 与 item_recent.xml 落地），item_recent 卡内边距 16→14dp
+- **状态感知轴·注入侧**：新增 dev/bundle/09_agent.js 只读状态机——独立 1s 轮询不进 syncComposer 中心；`agentStateOn` 门控（注入关 = 整个 IIFE 不启动，热更关 = 空拍自读零跨闭包调用）；判定自建（runActive/checkRunEnd 是 07 的闭包函数不可引，选择器字符串复制常量）：generating = v4-stop|chat-loading，thinking = 末条 assistant 行含 chat-reasoning，done = 活跃下降沿 + 反馈按钮 v4-feedback-(like|dislike)-<rid> 行外关联，waitConfirm = dock 内确认弹窗命中（POPUP_HINT_SEL 全量复制 + v60 可见性检查），error 本期不产出留注释位（选择器未经实机取证，宁漏报不误报），idle/unknown = 有行/无行；只报变化沿；`br.onAgentState` 判空 try-catch 静默（老 APK 无桥照常跑光点不上报）。悬浮光点自绘而非挂 #zcode-composer-icon——waitConfirm 恰是最需要被看见的状态而 ensureIcon 在弹窗态藏 icon；呼吸绿 1.2s（全 App 唯一 >300ms 动画例外）/ amber 常亮 / done 绿 2s 渐隐 / prefers-reduced-motion 降级半透明。局限如实注明：本段在顶层文档执行不被 08 的 BODY 广播带进 shadow DOM，该场景退化为 unknown（漏报不误报）
+- **状态感知轴·原生侧**：新建 `AgentStateStore`（宽松落盘 state + snippet + 时间戳，仿 RecentStore）；WebActivity 桥方法区 `onAgentState`（runOnUiThread 落盘 + 驱动状态条，异常静默）+ 顶部 2dp 状态条（绿呼吸 / amber 常亮 / done 绿 2s 渐隐后 GONE，其余 GONE；`statusStripOn` 门控关 = GONE；自读 ANIMATOR_DURATION_SCALE==0 降级半透明不读注入层变量；色走 @color/status_live|status_warn 语义槽位）；SettingsStore 三键 `agentStateOn`/`statusStripOn`/`errNotifyOn` 默认全开，走 `__zcSettings` 注入序列化 + applySettings 热更全链路（errNotifyOn 键先落地无消费——错误态取证通过接错误通知时才消费）；04_theme 诊断卡 feats 暴露三开关行；bundleVer 59→60
+- **⚠ 上版门槛（如实声明）**：状态机选择器稳定性**未经实机取证窗口**（evolution-plan §6 一期验收 2）——上版前须过：**≥2 小时真机窗口、每态 ≥10 次状态沿、误报 0**。取证不过走「只裁感知件」失败出口（09_agent 不注册 / 状态条光点 GONE / 仪表盘芯片退空仍显摘要时间，视觉件照常发版）
+- **收尾评审修**：09_agent.js 选择器出处注释引用 07_settings.js 的 7 处行号系统性漂移 5-9 行，逐处校正（runActive 158-159 / chat-reasoning 208（isAnswerRow 205）/ rowIdOf 201-204 / notify 134-141 及同源 3 处：feedback 查询 165、send 取法 169-175、done 证据 164-165），`_patch_web2.py` 已重跑再生成。冒烟扩容：smoke x5→x6 注入 + x10→x14 热更（补 agentStateOn=false 门控场景与三键 ZSET 写回断言）
+
+## [未发布] — v82 工作区（bundleVer 59）
+
+evolution-plan v1.2 的 P0 批次三件套（触感 / 最近列表回复摘要 / 色彩语义槽位第一批）+ 发版收尾（versionCode 46 / versionName 0.0.5）。
+
+- **P0① 触感收口**：manifest 补 `VIBRATE`（normal 级装即授予）——权限若先落而旧 JS 未清会激活既有哑炮微震，故权限与 JS 清理同批进 v82，窗口期为零。新增 `Haptics`（五类短震 connect/sent/done/confirm/error，API 29+ 预置波形、26-28 短震回退，`hapticOn` 门控、无权限/异常静默）；`SettingsStore` 加 `hapticOn` 默认开（照 notifyReply 模式，本 P0 无设置 UI）。WebActivity 手工改动如实记三处（收尾评审更正口径，原报"两处"）：桥方法区 `haptic(kind)` 白名单（未知 kind 静默）、`__zcSettings` 注入与 applySettings 热更序列化两处、回复链路落盘调用点补 `replyArrived`/`url` 参数。dev/bundle 旧 `navigator.vibrate` 7 处调用处置：5 处手势哑炮震感纯删（连同 vibrate 助手定义），2 处状态确认改经 `zcHaptic` 桥——confirm=等待确认弹窗（2s 防抖保留）、sent=发送成功（复用 v79① 新用户行+输入框清空双证据，门控拆分独立于归位开关）；`git grep -i vibrat dev/bundle` 已零命中。done 震接在 KeepAliveService 保活通知真正 post 处（去重通过链路传 `replyArrived=true`；前台会话服务必不在跑、走不到 post 不额外震，onProgress 中间进度不震）；bundleVer 58→59
+- **P0② 最近列表带回复摘要**：`RecentStore` 加 `lastReply`/`lastReplyAt`（opt* 宽松读旧数据取缺省，不 bump schema_v；upsert 按 mid 合并时继承摘要不因链接轮换清零），`item_recent` 第二行显「摘要 · 相对时间」，无摘要退化现状时间行（缺件健全）。收尾评审三修：a) 仅最终回复（`replyArrived=true`）落 RecentStore——中间流式进度只滚动通知预览，摘要不再恒为"最后一次进度文本"，桥线程每拍全量 load/save 一并消解；b) 会话定位改按桥持有的会话 url 走 `sameSession` 匹配（回复横幅深链直启 WebActivity 不经 upsert、"头部=当前会话"失真时会写错卡片；无匹配宁可不写）；c) 写路径加类级锁（主线程 upsert/remove 与桥线程 updateLastReply 跨实例 load→改→save 竞态关窗）
+- **P0③ 色彩语义槽位第一批**：深浅两表补齐 surface_high/stroke_strong/text_tertiary/status_live/status_warn/status_error/status_offline 七槽位（键集 15:15 一致且顺序一致）；品牌换绿 accent（深 `#00E676`/浅 `#00875A`）、on_accent 深色改 `#000000`；`#2E6BE6` 在 app/ 与 dev/ 归零（`git grep 2E6BE6 -- app dev` 零命中，文档残留见下条）；ic_logo 与引导卡 tint 走 `@color/accent` 间接引用自动换色；status_* 四键仅落表无调用方（一期状态条消费）；未动布局/themes/drawable/JS
+- **报告 v1.2**：evolution-plan 修订 v1.2——维护者两项拍板落地：远程批准/拒绝不做（附录 C 冻结、§4.3 锁屏通知收敛为摘要+点击直达）；色彩语义槽位顶层原则入 §3.2。收尾顺修：发版检查条款 grep 口径改 `git grep 2E6BE6 -- app dev`（原"全仓归零"被文档自身 6 处论证字面量自指矛盾），附录 B 改前快照补注记
+- 冒烟基线扩容：`_smoke_test.js` applySettings 组合 x8→x12（后补三开关 hapticOn/sendMinimize/amoledBlack 各一组 + 恢复默认一组，ZSET 跨场景存活故试毕复位）；dev/bundle 本轮未再动（bundleVer 59 由 P0① 落定并已重跑 `_patch_web2.py`，WebActivity 生成区实证）——_validate/_smoke/定向 grep 校验门由主流程统一跑，状态以彼为准
 
 v80 实机二验三条反馈的修复轮：两条居中根修 + 两个功能整套删除。
 

@@ -90,6 +90,24 @@ function run(flags) {
   }
 }
 
+// 场景 0（一期）：agentStateOn=false 注入 → 09_agent 整体不启动（不注册轮询定时器）。
+// 用 setInterval 计数差验证：两次注入之间唯一新增注册者应是 09（BODY 有 __zcodeDone
+// 防重入不再注册；08 的 30s 兜底每次注入都会注册，故只断言"有新增"）。
+// 注意在同一个 __zcSettings 对象上改键——BODY 首次执行时 06_composer 的 ZSET 绑定
+// 了它，之后 applySettings 写回的也是它；换对象会让热更断言读到野引用
+let siCount = 0;
+const realSetInterval = global.setInterval;
+global.setInterval = (...a) => { siCount++; return realSetInterval(...a); };
+window.__zcSettings = { agentStateOn: false };
+run({ navOn: true, replyOn: true, floatInput: true, uiAnim: true });
+const siAfterOff = siCount;
+if (window.__zcodeAgentOn !== undefined) global.__zcodeSmokeErrors.push('09_agent started despite agentStateOn=false');
+window.__zcSettings.agentStateOn = true;   // 09 启动判定/每拍读 window.__zcSettings（动态查找）
+run({ navOn: true, replyOn: true, floatInput: true, uiAnim: true });
+if (siCount <= siAfterOff) global.__zcodeSmokeErrors.push('09_agent poll interval not registered');
+if (window.__zcodeAgentOn !== true) global.__zcodeSmokeErrors.push('09_agent did not start (agentStateOn default)');
+global.setInterval = realSetInterval;
+
 // 场景 1: 全开
 run({ navOn: true, replyOn: true, floatInput: true, uiAnim: true });
 if (!window.__zcodeAPI) global.__zcodeSmokeErrors.push('api missing after inject');
@@ -98,6 +116,24 @@ if (!window.__zcodeAPI) global.__zcodeSmokeErrors.push('api missing after inject
 window.__zcodeAPI.applySettings({ scrollbar: false, turnNav: false, notifyReply: false, floatInput: false, uiAnim: false });
 window.__zcodeAPI.applySettings({ scrollbar: true, turnNav: true, notifyReply: true, floatInput: true, uiAnim: true });
 window.__zcodeAPI.applySettings({});   // 空对象必须无害
+// v82：三个后补开关的热更分支纳入基线（此前组合键仅覆盖 v76 前的五键）——
+// hapticOn（P0① 触感）、sendMinimize/amoledBlack（v79 ①⑨）。ZSET 跨场景存活，
+// 试完切回默认值，不污染后续场景的注入初始态
+window.__zcodeAPI.applySettings({ hapticOn: false });
+window.__zcodeAPI.applySettings({ sendMinimize: false });
+window.__zcodeAPI.applySettings({ amoledBlack: true });
+window.__zcodeAPI.applySettings({ hapticOn: true, sendMinimize: true, amoledBlack: false });
+// 一期：状态感知轴三键热更（agentStateOn/statusStripOn/errNotifyOn）——09_agent 每拍
+// 自读 ZSET.agentStateOn，写回即热更（关=空拍静默+光点移除）；statusStrip 的呈现消费
+// 在原生侧；errNotify 键先落地无消费。试完切回默认值，不污染后续场景
+window.__zcodeAPI.applySettings({ agentStateOn: false, statusStripOn: false, errNotifyOn: false });
+if (window.__zcSettings.agentStateOn !== false || window.__zcSettings.statusStripOn !== false ||
+    window.__zcSettings.errNotifyOn !== false) {
+  global.__zcodeSmokeErrors.push('agent-state keys not written back to ZSET');
+}
+window.__zcodeAPI.applySettings({ agentStateOn: true, statusStripOn: true, errNotifyOn: true });
+window.__zcodeAPI.applySettings({ agentStateOn: false });
+window.__zcodeAPI.applySettings({ agentStateOn: true });
 
 // 场景 3: 回复通知关闭注入 → API 仍在
 run({ navOn: true, replyOn: false, floatInput: true, uiAnim: true });
@@ -119,5 +155,5 @@ if (errs.length) {
   errs.forEach(e => console.error('  -', e));
   process.exit(1);
 }
-console.log('SMOKE OK: inject x5 + applySettings x8 passed');
+console.log('SMOKE OK: inject x6 + applySettings x14 passed');
 process.exit(0);   // bundle 常驻 interval 会让进程不退出，显式结束

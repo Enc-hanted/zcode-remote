@@ -17,6 +17,9 @@
         '--zc-stroke:rgba(255,255,255,0.14);--zc-stroke-faint:rgba(255,255,255,0.08);--zc-stroke-strong:rgba(255,255,255,0.20);' +
         '--zc-text:#F2F2F2;--zc-text-2:#FAFAFA;--zc-text-dim:#CFCFCF;--zc-text-3:#909090;' +
         '--zc-hover:rgba(255,255,255,0.08);--zc-hover-strong:rgba(255,255,255,0.12);--zc-outline:rgba(255,255,255,0.85);' +
+        // 一期状态感知轴：信号灯 token，与原生 @color/status_live/status_warn 严格同源同值
+        //（深色 = values-night/colors.xml，浅色覆盖见下）——不另设色，换主题=换表
+        '--zc-live:#00E676;--zc-warn:#F0B232;' +
         '--zc-radius:12px;--zc-radius-lg:16px;--zc-radius-xl:22px;}' +
         // 浅色主题：页面检测为浅色时 JS 给 <html> 挂 zcode-ui-light，整套 token 换白底黑字（04_theme.js reportTheme 驱动）
         'html.zcode-ui-light{' +
@@ -25,6 +28,7 @@
         '--zc-stroke:rgba(10,18,34,0.12);--zc-stroke-faint:rgba(10,18,34,0.06);--zc-stroke-strong:rgba(10,18,34,0.18);' +
         '--zc-text:#1B2230;--zc-text-2:#0F1522;--zc-text-dim:#3A4356;--zc-text-3:#8A93A6;' +
         '--zc-hover:rgba(10,18,34,0.06);--zc-hover-strong:rgba(10,18,34,0.10);--zc-outline:rgba(20,35,60,0.80);' +
+        '--zc-live:#00875A;--zc-warn:#B26A00;' +
         'color-scheme:light;}' +
         '@keyframes zcodeFadeUp{from{opacity:0;transform:translateX(-50%) translateY(16px)}to{opacity:1;transform:translateX(-50%)}}' +
         '@keyframes zcodeFadeUpNoX{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}' +
@@ -35,6 +39,9 @@
         '@keyframes zcodeFadePanel{from{opacity:0;transform:translateX(-50%) translateY(10px)}to{opacity:1;transform:translateX(-50%)}}' +
         '@keyframes zcodeFadePanelOut{from{opacity:1;transform:translateX(-50%) translateY(0)}to{opacity:0;transform:translateX(-50%) translateY(10px)}}' +
         '@keyframes zcodeFadeHint{from{opacity:0;transform:translateX(-50%) translateY(8px) scale(0.96)}to{opacity:1;transform:translateX(-50%)}}' +
+        // 一期 09_agent 悬浮光点呼吸（1.2s——状态灯呼吸是全 App 唯一 >300ms 动画例外，
+        // 与原生状态条 ValueAnimator 同参数；reduced-motion 时 09 不引用本动画改半透明常亮）
+        '@keyframes zcodeDotBreath{0%,100%{opacity:1}50%{opacity:0.25}}' +
         // 浮动输入（v65 图标化）：有消息未唤出时不再把整个 dock display:none——
         // 新版(3.14.4)页面给 composer 让位的 padding 挂在 timeline 内容列等节点上，
         // dock 一消失让位空间就失去锚点，底部留大块空白（真机实测+线上 bundle 取证）。
@@ -292,9 +299,6 @@
           h.parentNode.removeChild(h);
         }
       }, 1600);
-    }
-    function vibrate(){
-      try { if (navigator.vibrate) { navigator.vibrate(15); } } catch (e) {}
     }
     function styleRoot(){
       return isShadow ? root : (doc.head || doc.documentElement);
