@@ -44,7 +44,7 @@ class SessionWidgetProvider : AppWidgetProvider() {
                 val ids = manager.getAppWidgetIds(
                     ComponentName(context, SessionWidgetProvider::class.java),
                 )
-                if (ids.isNullOrEmpty()) return
+                if (ids == null || ids.isEmpty()) return
                 manager.updateAppWidget(ids, build(context))
             } catch (e: Exception) {
                 // ROM 差异：静默

@@ -191,7 +191,7 @@ class EntryActivity : AppCompatActivity() {
         }
     }
 
-    /** 分享文本提取：ACTION_SEND + text/*（manifest intent-filter 收 text/plain）；
+    /** 分享文本提取：ACTION_SEND + text MIME（manifest intent-filter 收 text/plain）；
      *  EXTRA_TEXT 按不可信输入：截断到 5000 字防 prefs 膨胀，空白视为无分享。 */
     private fun shareTextOf(intent: Intent): String? {
         if (intent.action != Intent.ACTION_SEND) return null

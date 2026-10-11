@@ -44,18 +44,47 @@ for base, _, names in os.walk(os.path.join(SRC, "java")):
             kt_files.append(os.path.join(base, n))
 
 
-def strip_kotlin(text):
-    # 先删 raw string，再删普通字符串，再删注释
+def strip_strings(text):
+    # 先删 raw string，再删普通字符串与字符字面量
     text = re.sub(r'"""(?:[^"]|"(?!""))*"""', '""', text, flags=re.S)
     text = re.sub(r'"(?:[^"\\]|\\.)*"', '""', text)
     text = re.sub(r"'(?:[^'\\]|\\.)*'", "''", text)
+    return text
+
+
+def strip_kotlin(text):
+    text = strip_strings(text)
     text = re.sub(r"//[^\n]*", "", text)
     text = re.sub(r"/\*.*?\*/", "", text, flags=re.S)
     return text
 
 
+def comment_depth_violation(text):
+    # Kotlin 块注释可嵌套：注释文本里出现 /* 会真的再开一层（CI 实测翻车源——
+    # 非贪婪删除正则会提前闭合，被吞的代码逃过下面的括号平衡检查）。逐 token 计深度。
+    depth = 0
+    i = 0
+    while i < len(text):
+        if text.startswith("/*", i):
+            depth += 1
+            i += 2
+        elif text.startswith("*/", i):
+            depth -= 1
+            if depth < 0:
+                return "多余的 */"
+            i += 2
+        else:
+            i += 1
+    if depth != 0:
+        return "块注释未闭合（嵌套深度残值 %d——检查注释文本里的 /* 字样）" % depth
+    return None
+
+
 for f in kt_files:
     src = open(f, encoding="utf-8").read()
+    violation = comment_depth_violation(strip_strings(src))
+    if violation:
+        err("KT %s: %s" % (os.path.basename(f), violation))
     stripped = strip_kotlin(src)
     for pair in ["{}", "()", "[]"]:
         a, b = pair
