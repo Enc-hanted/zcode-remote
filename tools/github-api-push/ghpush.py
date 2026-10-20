@@ -97,14 +97,17 @@ def push(token, repo, msg, fresh_root):
     for p in sorted(exclude):
         if p in remote_set:
             deletes.append(p)
-    # 本地被 gitignore 命中（远端独有，如入库的 keystore）：保留不删
-    kept, deletes = [], []
+    # 本地被 gitignore 命中（远端独有，如入库的 keystore）：保留不删。
+    # 注意分类结果写入 kept/delete_final，不得重新绑定 deletes——
+    # 曾因 `kept, deletes = [], []` 丢掉计算好的清单，导致永远删不掉远端陈留文件
+    kept, delete_final = [], []
     for p in sorted(set(deletes)):
         try:
             git("check-ignore", "-q", "--", p)
             kept.append(p)
         except subprocess.CalledProcessError:
-            deletes.append(p)
+            delete_final.append(p)
+    deletes = delete_final
 
     print("推送 %d 个文件，删除 %d 个，保留(gitignore) %d 个" % (len(push_set), len(deletes), len(kept)))
     entries = []
