@@ -4,6 +4,17 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/)。
 
+## [未发布] — v85 工作区（bundleVer 60）
+
+zcode 3.16 远控改版适配 P0（调研与方案见 `docs/adapter-plan-remote-v4.md`，本轮不含注入层选择器重建）。
+
+- **背景（全部本会话实证）**：新版远控改为「账号登录 + 服务端配对」模型——`/remote/v4` 打开先渲染页内登录中转页（title 固定 `ZCode - Web Remote Control Sign In`），登录经 OAuth（Z.ai 或 BigModel 双账号体系）完整导航回跳 `code/state` 换 JWT 后才进会话；真实二维码（v3.16.2）只含 `sid/mid/name/app_version`，不再携带配对密钥，鉴权完全靠账号 JWT；旧格式链接（`/remote?mid=…`）现 302 到 `/cn/remote` 404 页
+- **白名单放行 bigmodel.cn**（修「跳系统浏览器回不来」）：`shouldOverrideUrlLoading` 的 `isZai` 扩为 `z.ai || bigmodel.cn`（含子域）——BigModel 与 Z.ai 同为智谱主体，桌面端用 BigModel 账号时手机端必须走同一账号体系（官方登录页亦明示「请选择与电脑端相同的登录平台，并使用同一账号」），不放行即登录死循环
+- **注入门控**：`onPageFinished` 不再无条件注入——延后 1.2s 探测 `document.title`，登录中转页不注入（悬浮图标会叠在登录按钮上，Toast 提示一次「登录后自动返回；账号需与桌面端一致」）；会话/连接中页补上注入。SPA React 挂载晚于 onPageFinished，探测只认正向特征、不中不动作；+2.3s 次拍只补失败检测；换页 `onPageStarted` 撤销未决探测。pairing ~30s 超时晚于两拍，该场景页面自带「重新连接」按钮可用，不接管
+- **失效/死链原生兜底**：探测命中「校验失败/手机连接已失效」正文特征或 `404: This page could not be found` 标题时，接管为原生 errorView（复用既有布局零新增）——文案指回桌面端重开「移动端远程控制」，`btnRetry` 重载（桌面端已在等待时一键重连）、`btnHome` 回入口
+- **入口页**：新增静态登录引导卡（与电池/通知引导卡同构，灰语义竖条；无常开/关闭状态信号故不设可见性逻辑）；副题「链接即连」→「扫码连接」（链接不再是凭证）
+- **版本**：versionCode 48 / versionName 0.0.7；README/SECURITY 域名清单同步（bigmodel.cn 放行说明）
+
 ## [未发布] — v84 工作区（bundleVer 60）
 
 evolution-plan v1.2 二期批次（入口仪表盘 / 品牌资产 / 系统集成四件）+ 收尾评审三修 + 发版收尾（versionCode 47 / versionName 0.0.6）。

@@ -12,6 +12,7 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.Rect
+import android.net.Uri
 import android.net.http.SslError
 import android.os.Build
 import android.os.Bundle
@@ -3779,7 +3780,11 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
                 val uri = request.url
                 val host = uri.host.orEmpty()
                 val isHttp = uri.scheme == "https" || uri.scheme == "http"
-                val isZai = host == "z.ai" || host.endsWith(".z.ai")
+                // v85：新版远控登录墙的 BigModel 账号体系走 bigmodel.cn OAuth（与 z.ai 同为
+                // 智谱主体）。不放行会把登录页踢到系统浏览器，登录态回不到 WebView 的
+                // CookieManager——用户实测「跳出去就回不来，永远让重新登录」
+                val isZai = host == "z.ai" || host.endsWith(".z.ai") ||
+                    host == "bigmodel.cn" || host.endsWith(".bigmodel.cn")
                 if (isHttp && isZai) return false
                 if (!isHttp) {
                     // 非 http/https scheme（tel:/mailto:/intent: 等）一律拦截：
@@ -3798,11 +3803,13 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
             override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
                 errorView.visibility = View.GONE
                 progress.visibility = View.VISIBLE
+                // 换页撤销上一页的未决探测（在途回调最坏带回旧页 title，特征均为正向匹配，误伤面可忽略）
+                webView.removeCallbacks(remoteProbe)
             }
 
             override fun onPageFinished(view: WebView, url: String) {
                 progress.visibility = View.GONE
-                injectMobileFix()
+                scheduleRemoteProbe()
             }
 
             override fun onReceivedError(
@@ -3849,6 +3856,89 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
         lastSafeB = css
         if (::webView.isInitialized && webView.url != null) {
             webView.evaluateJavascript("window.__zcodeSafeB=$css;void 0", null)
+        }
+    }
+
+    // ---------- v85：新版远控登录/校验适配（zcode 3.16 改版，docs/adapter-plan-remote-v4.md P0） ----------
+    // 新版事实（本会话实证，含真实二维码解码）：远控页 /remote/v4 打开先渲染页内登录中转页
+    // （document.title 固定 "ZCode - Web Remote Control Sign In"，JS 写死不随语言），登录经
+    // OAuth 完整导航回跳后才进会话；链接失效或桌面端未在等待时渲染「校验失败/手机连接已失效」
+    // 终态页；旧格式链接（/remote?mid=…）现 302 到 /cn/remote 的 404 页。SPA 的 React 挂载晚于
+    // onPageFinished，统一延后探测再决策；只认正向特征（失败文案/404 标题/登录页标题），
+    // 探测不中不动作（宁缺勿错）。 pairing 超时（~30s）晚于两拍探测，该场景页面自带
+    // 「重新连接」按钮可用，不接管。
+
+    /** 首拍（1.2s）注入决策 + 失败检测；次拍（+2.3s）只补失败/登录页检测（晚挂载兜底） */
+    private var probePass = 0
+    private var probeInjected = false
+    private var loginHintShown = false
+
+    private val remoteProbe = object : Runnable {
+        override fun run() {
+            probePass++
+            runRemoteProbe(latePass = probePass >= 2)
+            if (probePass < 2) webView.postDelayed(this, 2300)
+        }
+    }
+
+    /** 远控页路径判定：/remote 与 /remote/v3|v4（新版按 appVersion 二选一） */
+    private fun isRemotePath(url: String): Boolean {
+        val path = try {
+            Uri.parse(url).path.orEmpty()
+        } catch (e: Exception) {
+            return false
+        }
+        return path == "/remote" || path.startsWith("/remote/")
+    }
+
+    private fun scheduleRemoteProbe() {
+        // 探测对任意页面跑（旧格式链接 302 后落在 /cn/remote 的 404 页，不在 /remote 前缀内）；
+        // 注入的路径门控收在 onRemoteProbeResult 里
+        webView.removeCallbacks(remoteProbe)
+        probePass = 0
+        probeInjected = false
+        webView.postDelayed(remoteProbe, 1200)
+    }
+
+    /** 一次 evaluateJavascript 同时取 document.title 与失败页正文特征，按三分支决策：
+     *  ① 登录中转页：不注入（旧逻辑无条件注入会把悬浮图标叠在登录按钮上），Toast 提示一次；
+     *  ② 失效/404：接管为原生指引（errorView 复用，重试=桌面端重开远控后重载，返回=入口页）；
+     *  ③ 其余（会话/连接中）：补上被推迟的注入。 */
+    private fun runRemoteProbe(latePass: Boolean) {
+        if (!::webView.isInitialized || webView.url == null) return
+        webView.evaluateJavascript(
+            "(function(){var t='';try{t=document.title||''}catch(e){}" +
+                "var f='';try{var x=(document.body&&document.body.innerText)||'';" +
+                "if(x.indexOf('手机连接已失效')>=0||x.indexOf('Mobile Connection Invalid')>=0)f='1'}catch(e){}" +
+                "return [t,f]})()",
+        ) { r ->
+            val arr = try {
+                JSONArray(r ?: "[]")
+            } catch (e: Exception) {
+                return@evaluateJavascript
+            }
+            val title = arr.optString(0)
+            val failed = arr.optString(1) == "1"
+            runOnUiThread { onRemoteProbeResult(title, failed, latePass) }
+        }
+    }
+
+    private fun onRemoteProbeResult(title: String, failed: Boolean, latePass: Boolean) {
+        if (title.contains("Web Remote Control Sign In")) {
+            if (!loginHintShown) {
+                loginHintShown = true
+                toast(R.string.login_hint)
+            }
+            return
+        }
+        if (failed || title.contains("404: This page could not be found")) {
+            errorText.setText(R.string.link_expired_desc)
+            errorView.visibility = View.VISIBLE
+            return
+        }
+        if (!latePass && !probeInjected && isRemotePath(webView.url.orEmpty())) {
+            probeInjected = true
+            injectMobileFix()
         }
     }
 

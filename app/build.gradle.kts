@@ -11,8 +11,8 @@ android {
         applicationId = "com.zcode.remote"
         minSdk = 26
         targetSdk = 35
-        versionCode = 47
-        versionName = "0.0.6"
+        versionCode = 48
+        versionName = "0.0.7"
     }
 
     // 固定 debug 签名：keystore 入库，CI 与本地同签，以后可覆盖安装

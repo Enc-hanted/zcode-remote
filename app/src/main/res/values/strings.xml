@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">ZCode Remote</string>
-    <string name="brand_subtitle">手机远控 · 链接即连</string>
+    <string name="brand_subtitle">手机远控 · 扫码连接</string>
     <string name="entry_hint">桌面端 ZCode 左下角点击手机图标，会生成远控二维码和链接。把链接粘贴到下面，或直接扫码。</string>
     <string name="connect_scan">扫码连接</string>
     <string name="connect_paste">粘贴剪贴板链接</string>
@@ -16,6 +16,10 @@
     <string name="recents">最近会话（长按删除）</string>
     <string name="recents_empty">还没有会话记录，扫码或粘贴远控链接开始</string>
     <string name="footer_note">远控链接等同于桌面控制权，只保存在本机，不会上传</string>
+    <string name="login_hint">在页面内登录后自动返回会话；账号需与桌面端登录一致（Z.ai 或 BigModel）</string>
+    <string name="login_card_title">新版 ZCode 需要登录一次</string>
+    <string name="login_card_desc">手机端登录的账号需与桌面端一致（Z.ai 或 BigModel），登录后在本应用内保持</string>
+    <string name="link_expired_desc">远控连接未建立：链接已失效，或桌面端没有在等待手机连接。\n\n请回到桌面端重新打开「移动端远程控制」，再点重试；若提示登录，登录后自动返回。</string>
     <string name="just_now">刚刚</string>
     <string name="minutes_ago">%1$d 分钟前</string>
     <string name="hours_ago">%1$d 小时前</string>
