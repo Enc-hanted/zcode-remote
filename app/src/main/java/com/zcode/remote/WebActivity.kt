@@ -3803,8 +3803,9 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
             override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
                 errorView.visibility = View.GONE
                 progress.visibility = View.VISIBLE
-                // 换页撤销上一页的未决探测（在途回调最坏带回旧页 title，特征均为正向匹配，误伤面可忽略）
+                // 换页撤销上一页的未决探测与复检（在途回调最坏带回旧页 title，h1 特征为精确匹配，误伤面可忽略）
                 webView.removeCallbacks(remoteProbe)
+                webView.removeCallbacks(recoveryProbe)
             }
 
             override fun onPageFinished(view: WebView, url: String) {
@@ -3864,21 +3865,43 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
     // （document.title 固定 "ZCode - Web Remote Control Sign In"，JS 写死不随语言），登录经
     // OAuth 完整导航回跳后才进会话；链接失效或桌面端未在等待时渲染「校验失败/手机连接已失效」
     // 终态页；旧格式链接（/remote?mid=…）现 302 到 /cn/remote 的 404 页。SPA 的 React 挂载晚于
-    // onPageFinished，统一延后探测再决策；只认正向特征（失败文案/404 标题/登录页标题），
-    // 探测不中不动作（宁缺勿错）。 pairing 超时（~30s）晚于两拍探测，该场景页面自带
-    // 「重新连接」按钮可用，不接管。
+    // onPageFinished，统一延后探测再决策。
+    // v85a 失守复盘（真机「连接上以后弹原生兜底」）：首版用 body.innerText 全文匹配失败文案、
+    // 一拍命中即全屏接管——任何瞬态渲染都会盖住活会话。收紧为三道闸：
+    // ① 只认失败屏 h1 精确文案（全文不再匹配）；
+    // ② 页内失败屏需连续两拍命中才接管（404 为静态标题，一拍即接管）；
+    // ③ 接管后每 2.5s 复检，失败屏消失（页面自愈）自动撤下原生层。
+    // 其余失败屏（桌面端已离线等）不动——页面自带文案与「重新连接」按钮，接管文案对不上号。
+    // pairing ~30s 超时晚于三拍，该场景同样交给页面自带按钮。
 
-    /** 首拍（1.2s）注入决策 + 失败检测；次拍（+2.3s）只补失败/登录页检测（晚挂载兜底） */
+    /** 三拍（约 1.2s/3.5s/6.5s）：注入决策 + 失败确认（页内失败屏连续两拍才接管） */
     private var probePass = 0
     private var probeInjected = false
     private var loginHintShown = false
+    private var failStreak = 0
 
     private val remoteProbe = object : Runnable {
         override fun run() {
             probePass++
-            runRemoteProbe(latePass = probePass >= 2)
-            if (probePass < 2) webView.postDelayed(this, 2300)
+            runRemoteProbe()
+            if (probePass < 3) webView.postDelayed(this, if (probePass == 1) 2300 else 3000)
         }
+    }
+
+    /** 接管后的复检：失败屏消失（页面自愈/状态变化）即撤下原生层 */
+    private val recoveryProbe = Runnable { recoveryTick() }
+
+    /** 探测取 document.title 与失败屏 h1；返回 [title, h1] */
+    private fun failProbeJs(): String =
+        "(function(){var t='';try{t=document.title||''}catch(e){}" +
+            "var h='';try{var e1=document.querySelector('h1');h=(e1&&e1.innerText)||''}catch(e){}" +
+            "return [t,h]})()"
+
+    private fun parseProbe(r: String?): Pair<String, String>? = try {
+        val arr = JSONArray(r ?: "null")
+        arr.optString(0) to arr.optString(1)
+    } catch (e: Exception) {
+        null
     }
 
     /** 远控页路径判定：/remote 与 /remote/v3|v4（新版按 appVersion 二选一） */
@@ -3895,35 +3918,22 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
         // 探测对任意页面跑（旧格式链接 302 后落在 /cn/remote 的 404 页，不在 /remote 前缀内）；
         // 注入的路径门控收在 onRemoteProbeResult 里
         webView.removeCallbacks(remoteProbe)
+        webView.removeCallbacks(recoveryProbe)
         probePass = 0
         probeInjected = false
+        failStreak = 0
         webView.postDelayed(remoteProbe, 1200)
     }
 
-    /** 一次 evaluateJavascript 同时取 document.title 与失败页正文特征，按三分支决策：
-     *  ① 登录中转页：不注入（旧逻辑无条件注入会把悬浮图标叠在登录按钮上），Toast 提示一次；
-     *  ② 失效/404：接管为原生指引（errorView 复用，重试=桌面端重开远控后重载，返回=入口页）；
-     *  ③ 其余（会话/连接中）：补上被推迟的注入。 */
-    private fun runRemoteProbe(latePass: Boolean) {
+    private fun runRemoteProbe() {
         if (!::webView.isInitialized || webView.url == null) return
-        webView.evaluateJavascript(
-            "(function(){var t='';try{t=document.title||''}catch(e){}" +
-                "var f='';try{var x=(document.body&&document.body.innerText)||'';" +
-                "if(x.indexOf('手机连接已失效')>=0||x.indexOf('Mobile Connection Invalid')>=0)f='1'}catch(e){}" +
-                "return [t,f]})()",
-        ) { r ->
-            val arr = try {
-                JSONArray(r ?: "[]")
-            } catch (e: Exception) {
-                return@evaluateJavascript
-            }
-            val title = arr.optString(0)
-            val failed = arr.optString(1) == "1"
-            runOnUiThread { onRemoteProbeResult(title, failed, latePass) }
+        webView.evaluateJavascript(failProbeJs()) { r ->
+            val probe = parseProbe(r) ?: return@evaluateJavascript
+            runOnUiThread { onRemoteProbeResult(probe.first, probe.second) }
         }
     }
 
-    private fun onRemoteProbeResult(title: String, failed: Boolean, latePass: Boolean) {
+    private fun onRemoteProbeResult(title: String, failHead: String) {
         if (title.contains("Web Remote Control Sign In")) {
             if (!loginHintShown) {
                 loginHintShown = true
@@ -3931,14 +3941,43 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
             }
             return
         }
-        if (failed || title.contains("404: This page could not be found")) {
-            errorText.setText(R.string.link_expired_desc)
-            errorView.visibility = View.VISIBLE
+        val failed = failHead.contains("手机连接已失效") ||
+            failHead.contains("Mobile Connection Invalid")
+        val dead404 = title.contains("404: This page could not be found")
+        if (failed || dead404) {
+            failStreak++
+            if (dead404 || failStreak >= 2) {
+                errorText.setText(R.string.link_expired_desc)
+                errorView.visibility = View.VISIBLE
+                webView.removeCallbacks(recoveryProbe)
+                webView.postDelayed(recoveryProbe, 2500)
+            }
             return
         }
-        if (!latePass && !probeInjected && isRemotePath(webView.url.orEmpty())) {
+        failStreak = 0
+        if (!probeInjected && isRemotePath(webView.url.orEmpty())) {
             probeInjected = true
             injectMobileFix()
+        }
+    }
+
+    private fun recoveryTick() {
+        if (!::webView.isInitialized || errorView.visibility != View.VISIBLE) return
+        webView.evaluateJavascript(failProbeJs()) { r ->
+            val probe = parseProbe(r)
+            runOnUiThread {
+                if (!::webView.isInitialized || errorView.visibility != View.VISIBLE) return@runOnUiThread
+                val still = probe != null && (
+                    probe.first.contains("404: This page could not be found") ||
+                        probe.second.contains("手机连接已失效") ||
+                        probe.second.contains("Mobile Connection Invalid")
+                    )
+                if (still) {
+                    webView.postDelayed(recoveryProbe, 2500)
+                } else {
+                    errorView.visibility = View.GONE
+                }
+            }
         }
     }
 
