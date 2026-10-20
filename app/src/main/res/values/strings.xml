@@ -18,8 +18,8 @@
     <string name="footer_note">远控链接等同于桌面控制权，只保存在本机，不会上传</string>
     <string name="login_hint">在页面内登录后自动返回会话；账号需与桌面端登录一致（Z.ai 或 BigModel）</string>
     <string name="login_card_title">新版 ZCode 需要登录一次</string>
-    <string name="login_card_desc">手机端登录的账号需与桌面端一致（Z.ai 或 BigModel），登录后在本应用内保持</string>
-    <string name="link_expired_desc">远控连接未建立：链接已失效，或桌面端没有在等待手机连接。\n\n请回到桌面端重新打开「移动端远程控制」，再点重试；若提示登录，登录后自动返回。</string>
+    <string name="login_card_desc">手机端登录的账号需与桌面端一致（Z.ai 或 BigModel），登录后在本应用内保持\n手机页面可切换/新建任务；提醒与小部件只覆盖当前打开的任务</string>
+    <string name="link_expired_desc">远控连接未建立：链接已失效，或桌面端没有在等待手机连接。\n\n请回到桌面端重新打开「移动端远程控制」，再点重试；桌面端刚重启的话远控会自动恢复，稍候再试即可；若提示登录，登录后自动返回。</string>
     <string name="just_now">刚刚</string>
     <string name="minutes_ago">%1$d 分钟前</string>
     <string name="hours_ago">%1$d 小时前</string>
@@ -40,7 +40,7 @@
     <string name="settings_amoled_black">纯黑 AMOLED·实验</string>
     <string name="settings_amoled_black_sub">深色下背景改纯黑（省电）；部分表面色待实机调整</string>
     <string name="settings_notify_reply">新回复通知</string>
-    <string name="settings_notify_reply_sub">切出后收到新回复时弹出提醒（页面结构检测，可能误报）</string>
+    <string name="settings_notify_reply_sub">切出后当前任务收到新回复时弹出提醒（页面结构检测，可能误报）</string>
     <string name="reply_notif_channel">新回复提醒</string>
     <string name="reply_notif_title">ZCode 新回复</string>
     <string name="settings_notify_status">通知权限</string>

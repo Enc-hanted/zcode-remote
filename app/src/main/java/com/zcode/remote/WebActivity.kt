@@ -3806,10 +3806,13 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
                 // 换页撤销上一页的未决探测与复检（在途回调最坏带回旧页 title，h1 特征为精确匹配，误伤面可忽略）
                 webView.removeCallbacks(remoteProbe)
                 webView.removeCallbacks(recoveryProbe)
+                seedPageTheme(url)
             }
 
             override fun onPageFinished(view: WebView, url: String) {
                 progress.visibility = View.GONE
+                // 早写若输给页面内联脚本（读 localStorage 在前），这里补写，下一跳生效
+                seedPageTheme(url)
                 scheduleRemoteProbe()
             }
 
@@ -3858,6 +3861,24 @@ table { display: block !important; max-width: 100% !important; overflow-x: auto 
         if (::webView.isInitialized && webView.url != null) {
             webView.evaluateJavascript("window.__zcodeSafeB=$css;void 0", null)
         }
+    }
+
+    // ---------- v86：主题种子（docs/adapter-plan-remote-v4.md v1.3-D1） ----------
+    // 页面主题读同源 localStorage["zcode-theme"]（system/zai-dark/zai-light），官方设计文档
+    // 明确：QR 不再携带 theme，两端互不耦合，且**默认 zai-dark**——不种子则浅色手机永远深底。
+    // 只在「未设置」时按系统深浅写一次：页面自带主题菜单（侧栏设置内），用户在页面内的
+    // 选择我们不碰；之后系统深浅切换也不会回改（要跟随系统可在页面里选 system）。
+    // 页面每次加载都读该键，onPageStarted 早写通常赶在页面内联脚本之前；onPageFinished 兜底。
+
+    private fun seedPageTheme(url: String?) {
+        if (!::webView.isInitialized) return
+        if (url == null || !url.contains("zcode.z.ai")) return
+        val theme = if (SystemBars.isDarkSystem(this)) "zai-dark" else "zai-light"
+        webView.evaluateJavascript(
+            "(function(){try{if(!localStorage.getItem('zcode-theme'))" +
+                "localStorage.setItem('zcode-theme','$theme')}catch(e){}})()",
+            null,
+        )
     }
 
     // ---------- v85：新版远控登录/校验适配（zcode 3.16 改版，docs/adapter-plan-remote-v4.md P0） ----------

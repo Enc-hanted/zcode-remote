@@ -4,6 +4,15 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/)。
 
+## [未发布] — v86 工作区（bundleVer 60）
+
+3.16.x 功能盘点后的 P1 三件（盘点全文见 `docs/adapter-plan-remote-v4.md` v1.3：官方 changelog + 远控页 bundle 全量 82 资源 + 桌面端开源仓库 `zai-org/ZCode@main`，含 `docs/web-remote-control/` 设计文档 11 篇与**官方 Android 端源码 `packages/android`**）。全部改动在 BUNDLE_JS 生成区之外，`_patch_web2.py` 无需重跑。
+
+- **主题跟随系统（D1）**：页面主题读同源 `localStorage["zcode-theme"]`（system/zai-dark/zai-light）且**默认 zai-dark**（官方 mobile-theme-control.md：QR 已去 theme 参数、两端互不耦合）——不种子则浅色手机永远深底。WebActivity 新增 `seedPageTheme(url)`：仅 `zcode.z.ai` 域、仅「未设置」时按系统深浅写一次（`SystemBars.isDarkSystem`），页面自带主题菜单故用户在页面内的选择不碰、此后系统切换不回改（要跟随可在页面选 system）；onPageStarted 早写（本地 eval 通常赶在页面网络 JS 之前）+ onPageFinished 兜底补写（输给内联脚本则下一跳生效）。种子即守卫（页面侧 `if(!getItem)`），无需 app 侧标记
+- **多任务口径校准（D3）**：3.16 手机端已是多任务客户端（首页/聊天两页 shell，可切换/新建任务，手机选中态独立于桌面）——本 app 的回复通知/未读/小部件只覆盖**当前打开的任务**（onReply/onAgentState 均源自当前渲染的聊天页），其他任务的完成只在页面任务列表有徽标、app 不提醒。文案如实声明：登录引导卡补一行「手机页面可切换/新建任务；提醒与小部件只覆盖当前打开的任务」，设置页「新回复通知」副题改「切出后当前任务收到新回复时弹出提醒」
+- **桌面自动恢复提示（D7）**：桌面 3.16 起远控启用意图持久化（一次启动成功后应用重启/崩溃自动恢复 device relay，用户手动停止才清除）——兜底页文案补「桌面端刚重启的话远控会自动恢复，稍候再试即可」
+- **版本**：versionCode 49 / versionName 0.0.8
+
 ## [未发布] — v85 工作区（bundleVer 60）
 
 zcode 3.16 远控改版适配 P0（调研与方案见 `docs/adapter-plan-remote-v4.md`，本轮不含注入层选择器重建）。

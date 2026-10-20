@@ -205,3 +205,57 @@ WS close codes：4004 SessionNotFound · 4009 SessionConflict · 4010 DesktopDis
 4. **P0 已落地**（versionCode 48 / versionName 0.0.7）：白名单放行 `bigmodel.cn`；注入门控（登录中转页不注入 + Toast 提示一次）；失效/404 页原生兜底（复用 errorView，重试/回入口）；入口页静态登录引导卡；README/SECURITY/CHANGELOG 同步。
 5. **新知**：`sid` 为持久设备标识 → 新格式链接在设备注册存续期间可复用（仍需桌面端等待 + 已登录）；autoResume/最近会话对**新格式**链接依然有效，死链主体是旧格式 404 与「桌面端未等待」。P1-2 的深链降级与 P0-3 兜底继续有效。
 6. **v1.2 真机返修（2026-10-20）**：真机实证登录/配对全链路已通（P0 目标达成），但暴露接管误报——「连接上以后弹原生兜底」。§4.1-3 的失败探测从「body 全文一拍接管」收紧为「h1 精确文案 + 连续两拍确认 + 接管后复检自动撤下」，其余失败屏（桌面端已离线等）不接管。
+
+---
+
+## v1.3 3.16.x 功能盘点与融合清单（2026-10-20）
+
+### 证据源（本轮新增）
+
+- **B1 官方 changelog**：`zcode.z.ai/cn/changelog`，3.16.2 发布于 2026-10-20，15 条新功能全清单（手机远控账号登录 / 手机远控管理设备 / 远程会话常驻进程 / 输入框切模型·思考力度·套餐 / 设置页管理远程设备 / 图片预览复制下载引用 / 文件浏览侧边面板多标签 / 插件市场 / Windows 未读提醒 等）。
+- **B2 远控页 bundle 全量反编译**：`/remote/v4/latest/assets/` 82 个资源（~8.4MB，主 bundle 4.7MB）。远控页是 zcode.z.ai 整站 SPA 的一个路由，桌面级 UI 组件（设置/插件市场/分享/自动化）与手机路由同 bundle。
+- **B3 桌面端开源仓库**：`zai-org/ZCode@main`（tag 停在 v3.15.1，3.16.x 在 main）。`packages/desktop/src/main/webRemoteControl*`、`packages/client/src/webRemoteControl*`、**`docs/web-remote-control/` 全套设计文档**（架构/配对/登录/主题/首页/重连/单持有者/快照预算 11 篇）、**`packages/android/` 官方 Android 端完整源码**。
+
+### C 认知修订（相对 v1.1/v1.2）
+
+1. **手机端是多任务客户端，不是单会话终端**（「一个二维码=一个会话」模型作废）。窄屏为首页/聊天两页 shell：首页与桌面共用 ProjectSidebar（workspace 列表 + 跨项目任务时间线），可打开任意任务、新建任务（悬浮按钮+工作区选择弹层）、重连断开的 SSH 远程工作区；手机选中态独立于桌面，互不切换。QR 里的初始任务仅用于选中定位。
+2. **desktop=continuous / phone=replayable**：非发送端的 replayable 订阅过滤流式 chunk（UI 显示「另一台设备正在发送消息...」），最终消息经 `getTaskSnapshot()` 对齐替换。⇒ 本 app 的 onReply DOM 监听在断线恢复/切任务回看时会遇到 **snapshot 整体重写 DOM**（新增待验证 #12：未读/回复去重）。
+3. **失败语义四分类**（校准 v85 探测的文案口径）：`invalid-mobile-connection`（WRONG_PARAM，**V2 页面自身拒绝旧 hash/t 参数**）/ `device-not-owned`（AUTH_FAILED，账号与桌面端不一致）/ `session-conflict`（KICKED 60 秒内第二次；首次自动 2~5 秒恢复一次）/ 404（旧路径）。`DEVICE_OFFLINE`=15 秒宽限可恢复、`INTERNAL`=可恢复等待、`waiting`=合法配对态（四步条：连接中转服务/设备鉴权/等待桌面端配对/同步工作区）——这三类页面自愈，不接管。
+4. **`remoteControlToken`/`relayOrigin` 形态已删除**（web-remote-login.md 开头明示）→ **§5-#9 可闭**；bundle 入口路由里该分支为死代码。
+5. **桌面 3.16 起远控启用意图持久化**：一次启动成功即记录目标，应用重启/崩溃自动恢复 device relay（登出保留目标转 auth-required；用户手动停止才清除）→ 「桌面端未在等待」兜底的出现频率显著下降，引导文案可补「桌面端重启后会自动恢复远控」。
+6. **官方 Android 端（packages/android，`com.example.zcode_mobile`）与本 app 同构**：WebView + 前台服务（`FOREGROUND_SERVICE_TYPE_DATA_SYNC` 低优通知 + START_NOT_STICKY）+ RecentLinksStore + UrlPolicy（生产仅 `https://zcode.z.ai/remote*`，debug 放开局域网 Vite 地址）；通知文案明确「真正的状态恢复交给 web 端 replayable snapshot 协议完成」——与本 app v85 后的保活姿态一致，KeepAlive 无需改动。官方端另支持 **`zcode://remote` 自定义 scheme** 深链（映射默认 URL、保留 query）。
+7. **登录持久化机制明确**：同源 localStorage 键 `oauth:zai:access_token` / `oauth:bigmodel:access_token` / `zcodejwttoken` / `oauth:active_provider` / `oauth_pending_logins`（nonce 跨标签页 CSRF 修复，取用即删、上限 5 条）。WebView 同源存储持久 → 登录应跨进程存活（§5-#7 缩水为一次真机确认）。**远控登录明确不提供 API Key 入口**（「远控需要账号身份」）；bundle 里的 `login-use-api-key-button` 属主站登录，勿混。
+8. **主题**：QR 不带 theme（设计文档明令移除，桌面/手机两端互不耦合）；页面本地偏好 `zcode-theme`，取值 `system`/`zai-dark`/`zai-light`，**默认 `zai-dark`**，`system` 跟随 `prefers-color-scheme`；页面自带浏览器表面同步（`meta[name=theme-color]`、`color-scheme`、根背景）。
+
+### D 融合清单
+
+| # | 融合点 | 价值 | 成本 | 落点 | 期 |
+|---|---|---|---|---|---|
+| D1 | **主题跟随系统**：首访种子 `localStorage.zcode-theme`（未设时按 Android UiMode 写 `zai-dark`/`zai-light`，置位标记后不再覆盖；页面内手动切换不受影响） | 高（默认 zai-dark 会在浅色手机上常年深底） | 低 | WebActivity onPageStarted 早期 evaluateJavascript（BUNDLE_JS 生成区外） | P1 |
+| D2 | **失败页文案语义化**（v85b）：按 §C-3 四分类替换 `link_expired_desc` 文案（链接过期/账号不一致/会话在其他设备打开/链接失效）；锚点候选=失败页 tone 字典（bundle `i4t`，`session-not-found` 等 key）+ 现有 h1 文案 | 中（四种终态现在同文案，用户分不清该重扫码还是换账号） | 中（需实机取证各失败页 DOM，P2 门不阻塞） | v85 探测块文案分支 | P2 |
+| D3 | **多任务口径校准**：「最近会话」语义=最近打开的任务；widget/通知/台面卡文案按「当前任务」口径复核；切任务后其他任务的完成不产生 app 通知（页面任务列表有状态徽标，无桥），文档如实声明 | 中（防用户误以为 app 漏报） | 低（文案+文档） | strings.xml + CHANGELOG | P1 |
+| D4 | **图片分享链**：页面原生支持图片附件（拖/贴/选 + 分片上传协议 ≤512KiB/片、逻辑消息 16MiB 上限、image/video/audio）。App 侧先做零注入版：ACTION_SEND `image/*` → 打开会话页 + Toast 引导用页面附件按钮发送；dataTransfer 注入 File 对象的自动发送列为 P3 实验 | 中高 | 低（零注入版）/高（自动注入版） | EntryActivity ACTION_SEND 扩展 + ShareDraft | P2/P3 |
+| D5 | **`zcode://remote` scheme 接入**：intent-filter 追加 scheme=zcode host=remote，与 https 链路共用 looksLikeRemoteLink（对齐官方 UrlPolicy 行为） | 低中（未来桌面端若生成该类链接直接接住） | 低 | AndroidManifest + EntryActivity | P2 |
+| D6 | **quota/用量上屏**：页面已有 `v4-session-quota-banner` + `session_token_usage` 推送 + 「切换模型/刷新额度」动作；app 侧再做属于重复建设。记录为「不做」，如入口页想显示则走注入层只读 DOM（候选） | 低 | — | — | 不做 |
+| D7 | **文案补齐**：引导卡/兜底页补「桌面端重启后会自动恢复远控」「会话可多任务切换，请在页面内切换任务」 | 低 | 低 | strings.xml | P1（随 D3） |
+
+> **落地记录（2026-10-20，v86 / versionCode 49）**：D1、D3、D7 已随 v86 提交落地（`seedPageTheme` + 三处文案）；D2/D4/D5 留待后续期，D6 记录为不做。
+
+### E 待验证清单增补（并入 §5）
+
+- **#10** 手机路由 composer 实际渲染哪些工具栏控件（模型/思考力度/附件/计划标记）——决定 D4 零注入版是否直接可用。
+- **#11** 两页 shell（首页/聊天页）下 05_nav/06_composer 行为：首页无输入框时 syncComposer 静默性；页间切换的 dock 重挂载跟随（v36/v64 轮询方案预期成立，待实机）。
+- **#12** snapshot 对齐/gap 恢复时 onReply 的重复触发与未读重复 +1（replayable 快照会整体重写消息 DOM；ReplyDedupe 是否覆盖该形态）。
+- **#7（缩水）**：机制已明确（同源 localStorage），仅需一次真机「杀进程重开不重登」确认。
+- **#9（闭）**：remoteControlToken 形态已删除。
+
+### F 证据明细
+
+- 配对协议：`docs/web-remote-control/relay-v2-pairing.md`（QR 契约=「`/remote/v4?app_version&sid&mid&name`，不含 hash/t 或 JWT/token」；心跳 5s±1s + 15s watchdog；手机退避 500ms×2ⁿ ≤10s；KICKED 首次 2~5s 恢复、60s 内第二次终态；DEVICE_OFFLINE 15s 宽限；已知限制：两台手机互踢可能一次反向抢回）。
+- 架构：`web-remote-control-architecture.md`（relay 只透传 `data.payload`，`zcode_type` ∈ bootstrap/workspace-list(+updated)/workspace-bridge/platform-request/mobile-view-state-update/rpc-frame(+ack, 分片 ≤1MiB、逻辑 ≤16MiB/64 片)/app-error；桌面 main 职责六条；启用意图持久化状态机）。
+- 登录：`web-remote-login.md`（OAuth 回调保留 sid/mid/name/app_version 白名单参数；`oauth_pending_logins` 跨标签页 nonce；切换账号确认弹窗；401 自动回登录）。
+- 主题：`mobile-theme-control.md`（QR 去 theme；本地偏好默认 zai-dark；system 跟随系统；浏览器表面同步三件套）。
+- 单持有者：`single-owner-stream-rendering.md`（replayable 旁观过滤 + snapshot 权威；`permission_request`/`elicitation_request`/`task_complete` 等不可被过滤）。
+- 重连：`mobile-remote-workspace-reconnect.md`（手机可触发 SSH 工作区重连；断开行→重连→可打开）。
+- 官方 Android：`RemoteControlUrlPolicy.kt`（生产白名单仅 `https://zcode.z.ai` 且 path 以 `/remote` 开头；debug 放开本地/私网）、`RemoteControlKeepAliveService.kt`（FGS dataSync + 低优常驻通知 + 注释「恢复交给 web replayable snapshot 协议」）、`RemoteControlRecentLinksStore.kt`。
+- bundle 关键字：`chat-attachment-button`、`v4-composer-plan-marker`（带移除按钮）、`v4-session-quota-banner`、`chat.toolbar.model/thoughtLevel`、`zcode-theme`/`zcode-locale`、`oauth_pending_logins`、失败 tone 字典 `i4t`、配对四步文案。
